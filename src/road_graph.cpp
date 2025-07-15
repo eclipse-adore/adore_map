@@ -32,19 +32,15 @@ RoadGraph::add_connection( Connection connection )
 }
 
 std::deque<LaneID>
-RoadGraph::get_best_path( LaneID from, LaneID to ) const
+RoadGraph::find_path( LaneID from, LaneID to, bool allow_reverse ) const
 {
-  // Priority queue to store (accumulated cost, LaneID)
-  std::priority_queue<std::pair<double, LaneID>, std::vector<std::pair<double, LaneID>>, std::greater<>> pq;
+  using QueueEntry = std::pair<double, LaneID>;
+  std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> pq;
 
-  // Maps to store the shortest path to each lane and previous lanes (for reconstructing the path)
   std::unordered_map<LaneID, double> shortest_paths;
   std::unordered_map<LaneID, LaneID> previous_roads;
+  std::unordered_set<LaneID>         visited;
 
-  // Set of visited lanes
-  std::unordered_set<LaneID> visited;
-
-  // Initialize the priority queue with the start point
   pq.push( { 0.0, from } );
   shortest_paths[from] = 0.0;
 
@@ -53,44 +49,52 @@ RoadGraph::get_best_path( LaneID from, LaneID to ) const
     auto [current_cost, current_road] = pq.top();
     pq.pop();
 
-    // Skip if the lane has already been visited
     if( visited.find( current_road ) != visited.end() )
-    {
       continue;
-    }
     visited.insert( current_road );
 
-    // If we've reached the destination, reconstruct the path
     if( current_road == to )
-    {
       return reconstruct_path( from, to, previous_roads );
-    }
 
-    // Explore successors (neighbors)
-    if( to_successors.count( current_road ) == 0 )
-      continue;
-    for( const auto& successor : to_successors.at( current_road ) )
-    {
-      // Find the connection between current_road and successor
-      auto connection = find_connection( current_road, successor );
-      if( connection )
+    // Explore both successors and (optionally) predecessors
+    auto try_neighbors = [&]( const std::unordered_map<LaneID, std::unordered_set<LaneID>>& neighbor_map, bool reverse_direction ) {
+      if( neighbor_map.count( current_road ) == 0 )
+        return;
+
+      for( const auto& neighbor : neighbor_map.at( current_road ) )
       {
-        // std::cerr << connection.value() << std::endl;
-        double new_cost = current_cost + connection->weight;
+        std::optional<Connection> conn;
+        if( !reverse_direction )
+          conn = find_connection( current_road, neighbor );
+        else
+          conn = find_connection( neighbor, current_road );
 
-        // If this path is shorter, update it
-        if( shortest_paths.find( successor ) == shortest_paths.end() || new_cost < shortest_paths[successor] )
+        if( !conn )
+          continue;
+
+        double new_cost = current_cost + conn->weight;
+        if( shortest_paths.find( neighbor ) == shortest_paths.end() || new_cost < shortest_paths[neighbor] )
         {
-          shortest_paths[successor] = new_cost;
-          previous_roads[successor] = current_road;
-          pq.push( { new_cost, successor } );
+          shortest_paths[neighbor] = new_cost;
+          previous_roads[neighbor] = current_road;
+          pq.push( { new_cost, neighbor } );
         }
       }
-    }
+    };
+
+    try_neighbors( to_successors, false ); // forward traversal
+    if( allow_reverse )
+      try_neighbors( to_predecessors, true ); // backward traversal
   }
+
   std::cerr << "failed to find route to end" << std::endl;
-  // If no path was found, return an empty vector
   return {};
+}
+
+std::deque<LaneID>
+RoadGraph::get_best_path( LaneID from, LaneID to ) const
+{
+  return find_path( from, to, false );
 }
 
 std::deque<LaneID>

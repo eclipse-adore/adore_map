@@ -337,6 +337,7 @@ Border::get_interpolated_point( double s ) const
   {
     interpolated_point           = spline->get_point_at_s( s );
     interpolated_point.parent_id = points[0].parent_id;
+    interpolated_point.max_speed = points[0].max_speed;
   }
   else
   {
@@ -371,6 +372,7 @@ Border::get_interpolated_point( double s ) const
         interpolated_point.y         = p1.y + t * ( p2.y - p1.y );
         interpolated_point.s         = s;
         interpolated_point.parent_id = p1.parent_id; // Assuming parent_id is taken from the first point
+        interpolated_point.max_speed = p1.max_speed;
 
         return interpolated_point;
       }

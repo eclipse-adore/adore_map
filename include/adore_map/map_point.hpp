@@ -23,7 +23,6 @@ namespace adore
 namespace map
 {
 struct MapPoint
-
 {
   MapPoint( double x, double y, size_t parent_id ) :
     x( x ),
@@ -67,5 +66,7 @@ struct MapPoint
     return os;
   }
 };
+
+// using MapPointPtr = std::shared_ptr<MapPoint>;
 } // namespace map
 } // namespace adore

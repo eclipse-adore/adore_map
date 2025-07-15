@@ -103,6 +103,8 @@ struct RoadGraph
   // Finds the best path from one lane to another using Dijkstra
   std::deque<LaneID> get_best_path( LaneID from, LaneID to ) const;
 
+  std::deque<LaneID> find_path( LaneID from, LaneID to, bool allow_reverse ) const;
+
   // Helper function to reconstruct the path from `from` to `to`
   std::deque<LaneID> reconstruct_path( LaneID from, LaneID to, const std::unordered_map<LaneID, LaneID>& previous_roads ) const;
 

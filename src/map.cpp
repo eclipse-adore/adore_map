@@ -35,6 +35,5 @@ Map::get_lane_speed_limit( size_t lane_id ) const
   return 13.6;
 }
 
-
 } // namespace map
 } // namespace adore

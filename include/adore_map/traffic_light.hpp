@@ -37,5 +37,7 @@ struct TrafficLight
   size_t id;
 };
 
+using TrafficLights = std::vector<TrafficLight>;
+
 } // namespace map
 } // namespace adore

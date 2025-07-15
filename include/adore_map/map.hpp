@@ -154,8 +154,99 @@ public:
     return false;
   }
 
-private:
+  template<typename Point>
+  double
+  get_distance_from_nearest_center( const Point& query_point ) const
+  {
+    double min_dist = std::numeric_limits<double>::max();
+    auto   nearest  = quadtree.get_nearest_point( query_point, min_dist );
+    if( !nearest )
+      return min_dist;
+
+    return math::distance_2d( *nearest, query_point );
+
+    auto lane_it = lanes.find( nearest->parent_id );
+    if( lane_it == lanes.end() )
+      return min_dist;
+
+    const auto& lane = lane_it->second;
+    if( !lane->borders.center.spline.has_value() )
+      return min_dist;
+
+    const auto& center_spline = lane->borders.center.spline.value();
+
+    const auto& spline = lane->borders.center.spline.value();
+
+    const double dx   = spline.get_x_derivative_at_s( nearest->s );
+    const double dy   = spline.get_y_derivative_at_s( nearest->s );
+    const double norm = std::sqrt( dx * dx + dy * dy );
+    if( norm < 1e-6 )
+      return min_dist;
+
+    const double nx = dx / norm;
+    const double ny = dy / norm;
+
+    const double px = nearest->x;
+    const double py = nearest->y;
+    const double qx = query_point.x;
+    const double qy = query_point.y;
+
+    const double dxq = qx - px;
+    const double dyq = qy - py;
+
+    const double nx_perp = -ny;
+    const double ny_perp = nx;
+
+    // Signed distance from query point to line
+    const double signed_distance = dxq * nx_perp + dyq * ny_perp;
+
+    return std::fabs( signed_distance );
+  }
 };
+
+inline double
+get_map_distance( const MapPoint& start_point, const MapPoint& end_point, const std::shared_ptr<Map>& map )
+{
+  auto lane_id_route = map->lane_graph.find_path( start_point.parent_id, end_point.parent_id, /* allow_reverse */ true );
+  if( lane_id_route.empty() )
+  {
+    std::cerr << "Failed to find route from " << start_point.parent_id << " to " << end_point.parent_id << std::endl;
+    return std::numeric_limits<double>::infinity();
+  }
+
+  double total_distance = 0.0;
+
+  for( size_t i = 0; i < lane_id_route.size(); ++i )
+  {
+    const auto& lane_id = lane_id_route[i];
+    const auto& lane    = map->lanes.at( lane_id );
+    const auto& points  = lane->borders.center.interpolated_points;
+    if( points.empty() )
+      continue;
+
+    double s_start, s_end;
+
+    // First lane
+    if( i == 0 && start_point.parent_id == lane_id )
+      s_start = start_point.s;
+    else
+      s_start = points.front().s;
+
+    // Last lane
+    if( i == lane_id_route.size() - 1 && end_point.parent_id == lane_id )
+      s_end = end_point.s;
+    else
+      s_end = points.back().s;
+
+    if( s_end < s_start )
+      std::swap( s_start, s_end ); // Ensure correct direction regardless of left_of_reference
+
+    total_distance += std::abs( s_end - s_start );
+  }
+
+  return total_distance;
+}
+
 
 } // namespace map
 } // namespace adore
