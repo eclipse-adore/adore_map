@@ -12,6 +12,7 @@
  *    Andrew Koener
  *    Marko Mizdrak
  ********************************************************************************/
+#include <optional>
 #define _USE_MATH_DEFINES
 #include "adore_map/lat_long_conversions.hpp"
 
@@ -103,7 +104,7 @@ calculate_utm_zone_letter( double lat )
 
 std::mutex proj_mutex;
 
-std::vector<double>
+std::optional<std::vector<double>>
 convert_lat_lon_to_utm( double lat, double lon )
 {
   std::lock_guard<std::mutex> lock( proj_mutex );
@@ -174,6 +175,7 @@ convert_lat_lon_to_utm( double lat, double lon )
   {
     std::cerr << "ERROR: Exception caught while converting LatLong to UTM. "
               << "Arguments: lat=" << lat << ", lon=" << lon << ". Error: " << e.what() << std::endl;
+    return std::nullopt;
   }
 
   return output;
