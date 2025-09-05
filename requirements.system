@@ -1,3 +1,4 @@
 pkg-config 
 libproj-dev
 libopencv-dev
+python3-pyproj
