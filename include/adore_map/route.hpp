@@ -263,18 +263,16 @@ get_default_route( const PoseT& start_pose, double max_length, const std::shared
 
   while( length < max_length && map->lane_graph.to_successors.count( current_lane_id ) )
   {
+    auto lane = map->lanes.at( current_lane_id );
+    route.add_route_section( lane->borders.center, *nearest_point, MapPoint(), lane->left_of_reference );
+    length += lane->length;
+
+    std::cerr << "route length " << length << " max " << max_length << std::endl;
     auto& lane_ids = map->lane_graph.to_successors.at( current_lane_id );
     if( lane_ids.size() == 0 )
       break;
 
-    size_t next_lane_id = *lane_ids.begin(); // just take first connecting lane
-
-    auto lane = map->lanes.at( next_lane_id );
-
-    route.add_route_section( lane->borders.center, *nearest_point, MapPoint(), lane->left_of_reference );
-
-    length          += lane->borders.center.get_length();
-    current_lane_id  = next_lane_id;
+    current_lane_id = *lane_ids.begin(); // just take first connecting lane
   }
 
   route.initialize_center_lane();
