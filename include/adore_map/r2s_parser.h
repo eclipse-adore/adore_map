@@ -21,11 +21,22 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include "adore_map/map_downloader.hpp"
+#include "adore_map/helpers.hpp"
 
 namespace adore
 {
 namespace r2s
 {
+
+/** @brief Compare two vectors of doubles for closeness within a tolerance
+ * @note Adjust default tolerance as needed
+ * @param a First vector of doubles
+ * @param b Second vector of doubles
+ * @param tolerance Tolerance value for comparison
+ * @return true if the vectors are close within the tolerance, false otherwise
+ */
+bool are_close( const std::vector<double>& a, const std::vector<double>& b, double tolerance = 2e-6 );
 
 // Data structure definitions for R2SL and R2SR
 struct BorderDataR2SL
@@ -37,6 +48,20 @@ struct BorderDataR2SL
   std::string         linetype;
   std::vector<double> x;
   std::vector<double> y;
+
+  /** @brief Equality operator for BorderDataR2SL
+   * @details Compares two BorderDataR2SL objects for equality based on their attributes
+   * @note The comparison for x and y coordinates uses a tolerance to account for floating-point precision
+   * @param[in] other The other BorderDataR2SL object to compare with
+   * @return true if the objects are equal, false otherwise
+   */
+  bool operator==( const BorderDataR2SL& other ) const
+  {
+    return id == other.id && parent_id == other.parent_id &&
+           datasource_description_id == other.datasource_description_id &&
+           material == other.material && linetype == other.linetype &&
+           are_close( x, other.x ) && are_close( y, other.y );
+  }
 };
 
 struct BorderDataR2SR
@@ -52,6 +77,23 @@ struct BorderDataR2SR
   std::string         linetype;
   std::vector<double> x;
   std::vector<double> y;
+
+  /** @brief Equality operator for BorderDataR2SR
+   * @details Compares two BorderDataR2SR objects for equality based on their attributes
+   * @note The comparison for x and y coordinates uses a tolerance to account for floating-point precision
+   * @param[in] other The other BorderDataR2SR object to compare with
+   * @return true if the objects are equal, false otherwise
+   */
+  bool operator==( const BorderDataR2SR& other ) const
+  {
+    return id == other.id && streetname == other.streetname &&
+           successor_id == other.successor_id &&
+           predecessor_id == other.predecessor_id &&
+           datasource_description_id == other.datasource_description_id &&
+           turn == other.turn && category == other.category &&
+           oneway == other.oneway && linetype == other.linetype &&
+           are_close( x, other.x ) && are_close( y, other.y );
+  }
 };
 
 // Utility function for splitting strings by a delimiter
@@ -64,6 +106,21 @@ BorderDataR2SR parse_border_data_r2sr( const std::vector<std::string>& attribute
 // Load functions to parse .r2sl and .r2sr files into BorderData structures
 std::vector<BorderDataR2SL> load_border_data_from_r2sl_file( const std::string& file_name );
 std::vector<BorderDataR2SR> load_border_data_from_r2sr_file( const std::string& file_name );
+
+// Load functions to load reference lines and lane borders from WFS URLs using MapDownloader
+/** @brief Load reference lines from a WFS layer using MapDownloader
+ * @param downloader Reference to the MapDownloader instance
+ * @param layer_name Name of the WFS layer to load reference lines from
+ * @return A vector of BorderDataR2SR objects representing the loaded reference lines
+ */
+std::vector<BorderDataR2SR> load_reference_lines( MapDownloader& downloader, const std::string& layer_name );
+
+/** @brief Load lane borders from a WFS layer using MapDownloader
+ * @param downloader Reference to the MapDownloader instance
+ * @param layer_name Name of the WFS layer to load lane borders from
+ * @return A vector of BorderDataR2SL objects representing the loaded lane borders
+ */
+std::vector<BorderDataR2SL> load_lane_borders( MapDownloader& downloader, const std::string& layer_name );
 
 // Print utility functions for debugging
 void print_string( const std::string& string_to_print );
