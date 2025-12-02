@@ -46,6 +46,9 @@ public:
 
   static Map load_from_file( const std::string& map_file_location, bool ignore_non_driving = false );
 
+  static Map load_from_r2s_wfs( MapDownloader& downloader, const std::string& layer_name_reference_lines,
+    const std::string& layer_name_lane_borders );
+
 
 private:
 

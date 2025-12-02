@@ -186,5 +186,246 @@ load_border_data_from_r2sr_file( const std::string& file_name )
   return data_vector;
 }
 
+// Load functions to load reference lines and lane borders from WFS URLs
+
+// Load reference lines from a WFS layer using MapDownloader
+std::vector<BorderDataR2SR> 
+load_reference_lines( MapDownloader& downloader, const std::string& layer_name )
+{
+  std::vector<BorderDataR2SR> reference_lines;
+  // Load reference lines from WFS
+  if( !downloader.download_map( layer_name ) )
+  { 
+    std::cerr << "load_reference_lines: Failed to load map." << std::endl;
+    return reference_lines;
+  }
+  nlohmann::json& json_data = downloader.get_json_data();
+  if( json_data.contains( "features" ) && json_data[ "features" ].is_array() )
+  {
+    for( const auto& feature : json_data[ "features" ] )
+    {
+      if( feature.contains( "properties" ) && feature.contains( "geometry" ) )
+      {
+        BorderDataR2SR border;
+        const auto& properties = feature[ "properties" ];
+        if( properties[ "id" ].is_null() )
+        {
+          border.id = 0;
+        } 
+        else
+        {
+          border.id = properties.value( "id" , 0 );
+        }
+        if( properties[ "streetname" ].is_null() || properties[ "streetname" ].get<std::string>().empty() ) 
+        {
+          border.streetname = "NULL";
+        }
+        else
+        {
+          border.streetname = properties.value( "streetname", "NULL" );
+        }
+        if( properties[ "successor_id" ].is_null() )
+        {
+          border.successor_id = 0;
+        }
+        else
+        {
+          border.successor_id = properties.value( "successor_id", 0 );
+        }
+        if( properties[ "predecessor_id" ].is_null() )
+        {
+          border.predecessor_id = 0;
+        }
+        else
+        {
+          border.predecessor_id = properties.value( "predecessor_id", 0 );
+        }
+        if( properties[ "datasource_description_id" ].is_null() )
+        {
+          border.datasource_description_id = 0;
+        }
+        else
+        {
+          border.datasource_description_id = properties.value( "datasource_description_id", 0 );
+        }
+        if( properties[ "turn" ].is_null() || properties[ "turn" ].get<std::string>().empty() )
+        {
+          border.turn = "NULL";
+        }
+        else
+        {
+          border.turn = properties.value( "turn", "NULL" );
+        }
+        if( properties[ "category" ].is_null() || properties[ "category" ].get<std::string>().empty() )
+        {
+          border.category = "NULL";
+        }
+        else
+        {
+          border.category = properties.value( "category", "NULL" );
+        }
+        if( properties[ "oneway" ].is_null() || properties[ "oneway" ].get<std::string>().empty() )
+        {
+          border.oneway = false;
+        }
+        else 
+        {
+          std::istringstream( properties.value( "oneway", "false" ) ) >> std::boolalpha >> border.oneway;
+        }
+        if( properties[ "linetype" ].is_null() || properties[ "linetype" ].get<std::string>().empty() )
+        {
+          border.linetype = "NULL";
+        }
+        else
+        {
+          border.linetype = properties.value( "linetype", "NULL" );
+        }
+        if( feature[ "geometry" ].contains( "coordinates" ) && feature[ "geometry" ][ "coordinates" ].is_array() )
+        {
+          for(const auto& coord : feature[ "geometry" ][ "coordinates" ] )
+          {
+            if( coord.is_array() && coord.size() >= 2 )
+            {
+              border.x.push_back( round_to_six_decimal_places( coord[ 0 ].get<double>() ) );
+              border.y.push_back( round_to_six_decimal_places( coord[ 1 ].get<double>() ) );
+            }
+            else
+            {
+              std::cerr << "load_reference_lines: Invalid coordinate format." << std::endl;
+            }
+          }
+        }
+        else
+        {
+          std::cerr << "load_reference_lines: Geometry does not contain valid coordinates." << std::endl;
+        }
+        reference_lines.push_back( border );
+      }
+      else
+      {
+        std::cerr << "load_reference_lines: Feature missing 'properties' or 'geometry'." << std::endl;
+      }
+    }
+  }
+  else
+  {
+    std::cerr << "load_reference_lines: Invalid JSON format: 'features' key not found or is not an array." << std::endl;
+  }
+   // Unload the map to free some of downloader's resources
+  downloader.unload_map();
+  return reference_lines;
+}
+
+// Load lane borders from a WFS layer using MapDownloader
+std::vector<BorderDataR2SL> 
+load_lane_borders( MapDownloader& downloader, const std::string& layer_name )
+{
+  std::vector<BorderDataR2SL> lane_borders;
+  // Load lane borders from WFS
+  if( !downloader.download_map( layer_name ) )
+  { 
+    std::cerr << "load_lane_borders: Failed to load map." << std::endl;
+    return lane_borders;
+  }
+  nlohmann::json& json_data = downloader.get_json_data();
+  if( json_data.contains( "features" ) && json_data[ "features" ].is_array() )
+  {
+    for( const auto& feature : json_data[ "features" ] )
+    {
+      if( feature.contains( "properties" ) && feature.contains( "geometry" ) )
+      {
+        BorderDataR2SL border;
+        const auto& properties = feature[ "properties" ];
+        if( properties[ "id" ].is_null() )
+        {
+          border.id = 0;
+        }
+        else
+        {
+          border.id = properties.value( "id", 0 );
+        }
+        if( properties[ "parent_id" ].is_null() )
+        {
+          border.parent_id = 0;
+        }
+        else
+        {
+          border.parent_id = properties.value( "parent_id" , 0);
+        }
+        if( properties[ "datasource_description_id" ].is_null() ) {
+          border.datasource_description_id = 0;
+        }
+        else
+        {
+          border.datasource_description_id = properties.value( "datasource_description_id" , 0 );
+        }
+        if( properties[ "material" ].is_null() || properties[ "material" ].get<std::string>().empty() ) {
+          border.material = "NULL";
+        }
+        else
+        {
+          border.material = properties.value( "material", "NULL" );
+        }
+        if( properties[ "type" ].is_null() || properties[ "type" ].get<std::string>().empty() )
+        {
+          border.linetype = "NULL";
+        }
+        else
+        {
+          border.linetype = properties.value( "type", "NULL" );
+        }       
+        if( feature[ "geometry" ].contains( "coordinates" ) && feature[ "geometry" ][ "coordinates" ].is_array() )
+        {
+          for( const auto& coord : feature[ "geometry" ][ "coordinates" ] )
+          {
+            if( coord.is_array() && coord.size() >= 2 )
+            {
+              border.x.push_back( round_to_six_decimal_places( coord[ 0 ].get<double>() ) );
+              border.y.push_back( round_to_six_decimal_places( coord[ 1 ].get<double>() ) );
+            }
+            else
+            {
+              std::cerr << "load_lane_borders: nvalid coordinate format." << std::endl;
+            }
+          }
+        }
+        else
+        {
+          std::cerr << "load_lane_borders: Geometry does not contain valid coordinates." << std::endl;
+        }
+        lane_borders.push_back( border );
+      }
+      else
+      {
+        std::cerr << "load_lane_borders: Feature missing 'properties' or 'geometry'." << std::endl;
+      }
+    }
+  }
+  else
+  {
+    std::cerr << "load_lane_borders: Invalid JSON format: 'features' key not found or is not an array." << std::endl;
+  }
+   // Unload the map to free some of downloader's resources
+  downloader.unload_map();
+  return lane_borders;
+}
+
+// Function to compare two vectors of doubles for closeness within a tolerance
+bool are_close(const std::vector<double>& a, const std::vector<double>& b, double tolerance)
+{
+  if( a.size() != b.size() )
+  {
+    return false;
+  }
+  for( size_t i = 0; i < a.size(); ++i )
+  {
+    if( std::abs( a[i] - b[i] ) > tolerance )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 } // namespace r2s
 } // namespace adore

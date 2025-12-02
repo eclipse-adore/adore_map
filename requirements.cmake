@@ -7,8 +7,12 @@ find_package(OpenCV REQUIRED)
 find_package(OpenDrive REQUIRED)
 set(OpenDrive_TARGETS OpenDrive::OpenDrive)
 
+find_package(CURL REQUIRED) 
+include_directories(${CURL_INCLUDE_DIR})
+
+find_package(caches REQUIRED)
 
 if(TARGET adore_map)
-    target_link_libraries(adore_map PRIVATE ${PROJ_LIBRARIES} ${OpenCV_LIBS})
+    target_link_libraries(adore_map PRIVATE ${PROJ_LIBRARIES} ${OpenCV_LIBS} ${CURL_LIBRARIES})
 endif()
 
