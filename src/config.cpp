@@ -15,45 +15,64 @@
 #include <sstream>
 #include "adore_map/config.hpp"
 
-// Parses a bounding box string and returns a BoundingBox object
-MapDownloader::BoundingBox Config::parse_bounding_box( const std::string& bbox_str, const std::string& target_srs )
+// Checks a bounding box given as four coordinates for sanity and returns a BoundingBox object
+const MapDownloader::BoundingBox Config::sanity_check_bounding_box( const std::vector<double>& coords, 
+  const std::string& target_srs )
 {  
-  if( bbox_str.empty() )
+  if( coords.empty() )
   {
-    return MapDownloader::BoundingBox( 0.0, 0.0, 0.0, 0.0, target_srs );
+    std::cerr << "Config::sanity_check_bounding_box: Error: Empty coordinate vector." << std::endl;
+    throw std::invalid_argument( "Empty coordinate vector." );
   }
-  std::vector<double> vect;
-  std::stringstream ss( bbox_str );
-  for( double i; ss >> i; )
+  if( coords.size() != 4 )
   {
-    vect.push_back( i );
-    if( ss.peek() == ',' || ss.peek() == ' ' )
-    {
-      ss.ignore();
-    }
+    std::cerr << "Config::sanity_check_bounding_box: Error: Invalid coordinate vector. "
+      << "Expected 4 values, got " << coords.size() << "." << std::endl;
+    throw std::invalid_argument( "Invalid coordinate vector." );
+  }
+  if( coords[0] >= coords[2] || coords[1] >= coords[3] )
+  {
+    std::cerr << "Config::sanity_check_bounding_box: Error: Invalid bounding box coordinates. "
+      << "Minimum coordinates must be less than maximum coordinates." << std::endl;
+    throw std::invalid_argument( "Invalid bounding box coordinates." );
   }
   return MapDownloader::BoundingBox
     (
-      vect.size() >= 1 ? vect[0] : 0.0,
-      vect.size() >= 2 ? vect[1] : 0.0,
-      vect.size() >= 3 ? vect[2] : 0.0,
-      vect.size() >= 4 ? vect[3] : 0.0,
+      coords[0], coords[1], coords[2], coords[3], 
       target_srs
     );
 }
 
-// Loads properties from a file and returns a Properties object
-Properties Config::load_properties( const std::string& filename )
+// Loads configuration from a JSON file and returns an nlohmann::json object
+nlohmann::json Config::load_config( const std::string& filename )
 {
-    Properties props = PropertiesParser::Read( filename );
-    auto names = props.GetPropertyNames();
-    if( names.empty() )
+  nlohmann::json config;
+
+  std::ifstream file( filename );
+  if( file.is_open() )
+  {
+    try
     {
-      std::cerr << "Config::load_properties: Warning: No properties found in file: " << filename << std::endl;
-    }
-    for( const auto& name : names )
+      file >> config;
+    } 
+    catch ( const nlohmann::json::parse_error& e ) 
     {
-      std::cout << name << " = " << props.GetProperty( name ) << std::endl;
+      std::cerr << "Config::load_config: JSON parse error in file " << filename 
+        << ": " << e.what() << std::endl;
+      file.close();
+      throw std::runtime_error( "JSON parse error in file: " + filename );
     }
-    return props;
-} 
+    file.close();
+    std::cout << "Config::load_config: Loaded configuration from " << filename << ":" << std::endl;
+    for( auto& el : config.items() )
+    {
+      std::cout << el.key() << " = " << el.value() << std::endl;
+    }
+    return config; 
+  }
+  else 
+  {
+    std::cerr << "Config::load_config: Failed to open JSON file: " << filename << std::endl;
+    throw std::runtime_error( "Failed to open JSON file: " + filename );
+  }
+}

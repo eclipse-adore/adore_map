@@ -193,13 +193,10 @@ std::vector<BorderDataR2SR>
 load_reference_lines( MapDownloader& downloader, const std::string& layer_name )
 {
   std::vector<BorderDataR2SR> reference_lines;
-  // Unload any map that would be already loaded
-  downloader.unload_map();
   // Load reference lines from WFS
   if( !downloader.download_map( layer_name ) )
   { 
     std::cerr << "load_reference_lines: Failed to load map." << std::endl;
-    downloader.cleanup();
     return reference_lines;
   }
   nlohmann::json& json_data = downloader.get_json_data();
@@ -314,7 +311,7 @@ load_reference_lines( MapDownloader& downloader, const std::string& layer_name )
   {
     std::cerr << "load_reference_lines: Invalid JSON format: 'features' key not found or is not an array." << std::endl;
   }
-   // Unload the map to free downloader's resources
+   // Unload the map to free some of downloader's resources
   downloader.unload_map();
   return reference_lines;
 }
@@ -324,13 +321,10 @@ std::vector<BorderDataR2SL>
 load_lane_borders( MapDownloader& downloader, const std::string& layer_name )
 {
   std::vector<BorderDataR2SL> lane_borders;
-  // Unload any map that would be already loaded
-  downloader.unload_map();
   // Load lane borders from WFS
   if( !downloader.download_map( layer_name ) )
   { 
     std::cerr << "load_lane_borders: Failed to load map." << std::endl;
-    downloader.cleanup();
     return lane_borders;
   }
   nlohmann::json& json_data = downloader.get_json_data();
@@ -411,7 +405,7 @@ load_lane_borders( MapDownloader& downloader, const std::string& layer_name )
   {
     std::cerr << "load_lane_borders: Invalid JSON format: 'features' key not found or is not an array." << std::endl;
   }
-   // Unload the map to free downloader's resources
+   // Unload the map to free some of downloader's resources
   downloader.unload_map();
   return lane_borders;
 }

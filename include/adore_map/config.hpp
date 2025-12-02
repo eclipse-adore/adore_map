@@ -12,18 +12,17 @@
  ********************************************************************************/
 
 #pragma once
-#include <PropertiesParser.h>
 #include "adore_map/map_downloader.hpp"
-using namespace cppproperties;
+#include <nlohmann/json.hpp>
 
 /**
- * @brief Config class to handle configuration properties for the map downloader
+ * @brief Class to handle the configuration for the map downloader, stored in a JSON file 
  */
 class Config
 {
 public:
 
-  const cppproperties::Properties props;
+  const nlohmann::json props;
   const std::string server_url;
   const std::string project_name;
   const std::string target_srs;
@@ -35,43 +34,43 @@ public:
   const std::string reference_line_filename;
   const std::string lane_border_filename;
 
-  /** @brief Constructor that initializes the configuration from a properties file
-   * @param filename Path to the properties file
+  /** @brief Constructor that initializes the configuration from a JSON file
+   * @param filename Path to the JSON file
    */
-  Config( const std::string& filename )
-    : props( load_properties( filename ) ),
-    server_url( props.GetProperty( "url" ) ),
-    project_name( props.GetProperty( "project_name" ) ),
-    target_srs(props.GetProperty( "target_srs" ) ),
-    bbox( parse_bounding_box( props.GetProperty( "bbox" ), target_srs ) ),
-    username( props.GetProperty( "username" ) ),
-    password( props.GetProperty( "password" ) ),
-    layer_name_reference_lines( props.GetProperty( "reference_lines" ) ),
-    layer_name_lane_borders( props.GetProperty( "laneborders" ) ),
-    reference_line_filename( props.GetProperty( "output" ) + ".rs2r" ),
-    lane_border_filename( props.GetProperty( "output" ) + ".r2sl" )
+  Config( const std::string& filename ) : 
+    props( load_config( filename ) ),
+    server_url( props[ "url" ] ),
+    project_name( props[ "project_name" ] ),
+    target_srs( props[ "target_srs" ] ),
+    bbox( sanity_check_bounding_box( props[ "bbox" ], target_srs ) ),
+    username( props[ "username" ] ),
+    password( props[ "password" ] ),
+    layer_name_reference_lines( props[ "reference_lines" ] ),
+    layer_name_lane_borders( props[ "laneborders" ] ),
+    reference_line_filename( props[ "output" ].get<std::string>() + ".rs2r" ),
+    lane_border_filename( props[ "output" ].get<std::string>() + ".r2sl" )
   {
   }
 
 private:
 
-  /** @brief Loads properties from a file and returns a Properties object
-   * @details This function reads a properties file using the PropertiesParser and
-   *          returns a Properties object containing the key-value pairs. It also
-   *          prints out the loaded properties for verification.
-   * @param filename The path to the properties file
-   * @return A Properties object containing the loaded properties
+  /** @brief Loads configuration from a JSON file and returns an nlohmann::json object
+   * @details This function reads a JSON file and returns an nlohmann::json object 
+   *          representing the key-value pairs of the configuration. It also prints out 
+   *          the loaded configuration for verification.
+   * @param filename The path to the JSON file
+   * @return An nlohmann::json object containing the loaded configuration
    */
-  static Properties load_properties( const std::string& filename );
+  static nlohmann::json load_config( const std::string& filename );
   
-  /** @brief Parses a bounding box string and returns a BoundingBox object
-   * @details The bounding box string should be in the format "min_lat,min_lon,max_lat,max_lon".
-   * @note If the string is empty, a default BoundingBox with all zeros is returned.
-   * @note The target_srs parameter is used to set the coordinate reference system of the bounding box.
-   * @note The function splits the string by commas and converts the values to double
-   * @param bbox_str The bounding box string in the format "min_lat,min_lon,max_lat,max_lon"
+  /** @brief Checks a bounding box given as four coordinates for sanity and returns a BoundingBox object
+   * @details First coordinate pair for lower left corner, second coordinate pair for upper right corner
+   * @details Validates the provided coordinates and constructs a BoundingBox object
+   * @note The \ref target_srs parameter is used to set the coordinate reference system of the bounding box
+   * @param coords A vector of doubles representing the bounding box coordinates
    * @param target_srs The target spatial reference system
    * @return A BoundingBox object representing the parsed bounding box
    */
-  static MapDownloader::BoundingBox parse_bounding_box( const std::string& bboxStr, const std::string& targetSrs );
+  static const MapDownloader::BoundingBox sanity_check_bounding_box( const std::vector<double>& coords, 
+    const std::string& target_srs );
 };

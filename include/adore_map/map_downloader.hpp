@@ -16,11 +16,10 @@
 #include <string>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
-
-class MapCache; // Forward declaration to avoid circular dependency
-
+#include "adore_map/map_cache.hpp"
+#include "adore_map/curl_wrapper.hpp"
 /**
- * @brief Class for downloading map data from a server with caching capabilities
+ * @brief Class with caching capabilities for downloading map data from a WFS server 
  * @details This class provides methods to download map data from a specified server and project,
  *          with support for caching the downloaded data both in memory and on disk. It uses cURL 
  *          for HTTP requests and nlohmann::json for handling JSON data. The class allows for easy 
@@ -36,7 +35,6 @@ public:
   class BoundingBox
   {
   public:
-    BoundingBox() : min_lat( 0.0 ), min_lon( 0.0 ), max_lat( 0.0 ), max_lon( 0.0 ), crs( "" ) {}
     BoundingBox( double min_lat, double min_lon, double max_lat, double max_lon, const std::string& crs )
         : min_lat( min_lat ), min_lon( min_lon ), max_lat( max_lat ), max_lon( max_lon ), crs( crs ) {}
         
@@ -46,7 +44,7 @@ public:
     inline double get_min_lon() const { return min_lon; }
     inline double get_max_lat() const { return max_lat; }
     inline double get_max_lon() const { return max_lon; }
-    inline std::string get_crs() const { return crs; }
+    inline const std::string& get_crs() const { return crs; }
 
     /** @brief Convert the bounding box to a string representation
      * @details The string representation is formatted for use in query parameters,
@@ -101,12 +99,7 @@ public:
     constexpr static int precision = 6;
   };
 
-  /** @brief Default constructor for MapDownloader
-   */
-  MapDownloader();
-
-  /**
-   * @brief Parameterized constructor for MapDownloader
+  /** @brief Parameterized constructor for MapDownloader
    * @param server_url URL of the map server
    * @param username Username for authentication
    * @param password Password for authentication
@@ -116,25 +109,9 @@ public:
    * @param debug Boolean flag to enable or disable debug mode
    */
   MapDownloader( const std::string& server_url, const std::string& username, const std::string& password, 
-      const std::string& project_name, const BoundingBox& bounding_box = BoundingBox( 0.0, 0.0, 0.0, 0.0, "" ), 
-      std::string file_cache_path = "", const bool debug_mode = false );
-
-  /** @brief Destructor for MapDownloader
-   */
-  ~MapDownloader();
-
-  // Methods to initialize and clean up cURL, load map data as JSON, unload map data, parse JSON, 
-  // pretty print JSON, and create JSON files
-  // Versions with less parameters using member variables.
-
-  /** @brief Initializes the MapDownloader instance by setting up cURL
-   * @return true if initialization is successful, false otherwise
-   */
-  bool initialize();
-
-  /** @brief Cleans up the MapDownloader instance by releasing cURL resources
-   */
-  void cleanup();
+      const std::string& project_name, const BoundingBox& bounding_box, const std::string& file_cache_path = "", 
+      const bool curl_global_init = false, const bool curl_global_cleanup = false, 
+      const bool debug_mode = false );
 
   /** @brief Downloads map data for a specific layer
    * @param layer_name Name of the layer to download
@@ -159,7 +136,7 @@ public:
   void pretty_print_map();
 
   /** @brief Unloads the map data from memory 
-   * @details Clears the internal read buffer and the internal JSON data
+   * @details Clears the read buffer of the internal curl wrapper and the internal JSON data
    */
   void unload_map();
 
@@ -185,88 +162,49 @@ public:
 
   // Versions with more parameters for flexibility
 
-  /** @brief Static method to initialize cURL
-   * @details This method initializes the cURL library, sets options for the request,
-   *          and prepares the cURL handle for use.
-   * @param username Username for authentication
-   * @param password Password for authentication
-   * @param curl Pointer to a cURL handle
-   * @param read_buffer Pointer to a string where the response will be stored
-   * @return CURLcode indicating the result of the initialization
-   */
-  static CURLcode initialize_curl( const std::string& username, const std::string& password, CURL **curl, 
-    std::string* read_buffer );
+   /** @brief Downloads map data for a specific layer within a bounding box
+    * @param server_url URL of the map server
+    * @param project_name Name of the project on the map server
+    * @param layer_name Name of the layer to download
+    * @param bounding_box Bounding box for the map data request
+    * @return true if the download is successful, false otherwise
+    */
+  bool download_map( const std::string& server_url, const std::string& project_name, 
+    const std::string& layer_name, const BoundingBox& bounding_box );
 
-  /** @brief Static method to clean up cURL resources
-   * @param curl Pointer to the cURL handle to be cleaned up
+  /** @brief Unloads the map data from memory
+   * @details Clears the internal read buffer of the curl wrapper and the given JSON data
+   * @param json_data JSON object to be cleared
    */
-  static void curl_cleanup( CURL *curl );
-
-  /** @brief Downloads map data as JSON using cURL
-   * @param curl Pointer to the cURL handle
-   * @param server_url URL of the map server
-   * @param project_name Name of the project on the map server
-   * @param layer_name Name of the layer to download
-   * @param bounding_box Bounding box for the map data request
-   * @param read_buffer Pointer to the string where the response will be stored
-   * @return CURLcode indicating the result of the operation
-   */
-  CURLcode download_map( CURL *curl, const std::string& server_url, const std::string& project_name, 
-    const std::string& layer_name, const BoundingBox& bounding_box, std::string* read_buffer );
-
-  /** @brief Unloads the map data from memory 
-   * @details Clears the given read buffer and JSON data
-   * @param read_buffer Pointer to the read buffer string
-   * @param json_data Reference to the JSON data object
-   */
-  static void unload_map( std::string* read_buffer, nlohmann::json& json_data );
+  void unload_map( nlohmann::json& json_data );
 
   /** @brief Pretty prints the map data from a given JSON object
-   * @param json_data The JSON object to be pretty printed
+   * @param json_data JSON object to be pretty printed
    */
   static void pretty_print_map( const nlohmann::json& json_data );
 
   /** @brief Saves the map data from a given JSON object to a file
-   * @param json_data The JSON object containing the map data
-   * @param filename The name of the file to save the map data to
+   * @param json_data JSON object containing the map data
+   * @param filename Name of the file to save the map data to
    */
   static void save_map( const nlohmann::json& json_data, const std::string& filename );
 
-  /** @brief Saves the map data from a JSON string to a file
-   * @param json_str The JSON string containing the map data
-   * @param filename The name of the file to save the map data to
-   */
-  static void save_map( const std::string& json_str, const std::string& filename );
-
   /** @brief Loads the map data from a file into a given JSON object
-   * @param filename The name of the file to load the map data from
-   * @param json_data Reference to the JSON object to populate with the map data
+   * @param filename Name of the file to load the map data from
+   * @param json_data JSON object to populate with the map data
    */
   static void load_map( const std::string& filename, nlohmann::json& json_data );
   
   // Getters for member variables
 
-  //inline std::string get_read_buffer() const { return read_buffer; }
-  inline const std::string& get_read_buffer() const { return read_buffer; }
+  inline const std::string& get_read_buffer() const { return curl_wrapper->get_read_buffer(); }
   inline const std::string& get_server_url() const { return server_url; }
   inline const BoundingBox& get_bounding_box() const { return bounding_box; }
-  inline const std::string& get_username() const { return username; }
-  inline const std::string& get_password() const { return password; }
   inline const std::string& get_project_name() const { return project_name; }
   inline const nlohmann::json& get_json_data() const { return json_data; }
-  inline const std::string& get_file_cache_path() const { return file_cache_path; }
-  inline MapCache* get_map_cache() const { return map_cache; }
+  inline const MapCache& get_map_cache() const { return map_cache; }
 
 private:
-  /** @brief cURL write callback function
-   * @details This function is called by cURL when data is received from the server. 
-   * @param ptr Pointer to the received data
-   * @param size Size of each data element
-   * @param nmemb Number of data elements
-   * @param userdata Pointer to the user data (in this case, a std::string)
-   * @return Number of bytes written
-   */
-  static size_t write_callback( char* ptr, size_t size, size_t nmemb, void* userdata );
 
   /** @brief Downloads map data as JSON for a specific layer
    * @param layer_name Name of the layer to download
@@ -281,44 +219,41 @@ private:
    */
   bool download_map_as_json( const std::string& layer_name, const BoundingBox& bounding_box );
 
-  /** @brief Downloads map data as JSON using cURL
-   * @param curl Pointer to the cURL handle
+  /** @brief Downloads map data as JSON
    * @param server_url URL of the map server
    * @param project_name Name of the project on the map server
    * @param layer_name Name of the layer to download
    * @param bounding_box Bounding box for the map data request
-   * @param read_buffer Pointer to the string where the response will be stored
    * @return CURLcode indicating the result of the operation
    */
-  CURLcode download_map_as_json( CURL *curl, const std::string& server_url, const std::string& project_name, 
-    const std::string& layer_name, const BoundingBox& bounding_box, std::string* read_buffer );
+  bool download_map_as_json( const std::string& server_url, const std::string& project_name, 
+    const std::string& layer_name, const BoundingBox& bounding_box );
+
+  /** @brief Parses JSON data from the internal read buffer and populates the internal JSON data object */
+  void parse_json();
+
+  /** @brief Parses JSON data from a string and populates the internal JSON data object */
+  void parse_json( const std::string& json_str );
+
+  /** @brief Parses JSON data from the internal read buffer and populates the provided JSON data object */
+  void parse_json( nlohmann::json& json_data );
 
   /** @brief Parses JSON data from a string
-   * @param json_str The JSON string to be parsed
-   * @param json_data Reference to the JSON data object to be populated 
+   * @param json_str JSON string to be parsed
+   * @param json_data JSON data object to be populated 
    */
   static void parse_json( const std::string& json_string, nlohmann::json& json_data );
 
   /** @brief Saves the map data stored in json_data to a file
-   * @param filename The name of the file to save the map data to
+   * @param filename Name of the file to save the map data to
    */
   void save_json( const std::string& filename );
-
-  /** @brief Saves the map data from a given JSON object to a file
-   * @param json_data The JSON object containing the map data
-   * @param filename The name of the file to save the map data to
-   */
-  static void save_json( const nlohmann::json& json_data, const std::string& filename );
-  
-  CURL* curl;
-  std::string read_buffer;
-  std::string server_url;
-  std::string username;
-  std::string password;
-  std::string project_name;
-  BoundingBox bounding_box;
-  std::string file_cache_path; // Path to the cache directory for saving map data
-  bool debug_mode; // Flag to enable or disable debug mode
+ 
+  std::unique_ptr<CurlWrapper> curl_wrapper;
+  const std::string server_url;
+  const std::string project_name;
+  const BoundingBox bounding_box;
+  const bool debug_mode; // Flag to enable or disable debug mode
   nlohmann::json json_data;
-  MapCache* map_cache; // Instance of MapCache for caching map data
+  MapCache map_cache; // Instance of MapCache for caching map data
 };

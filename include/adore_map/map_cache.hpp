@@ -19,7 +19,7 @@
 #include <filesystem>
 #include <caches/lru_cache_policy.hpp>
 #include "adore_map/xcache.hpp"
-#include "adore_map/map_downloader.hpp"
+#include "adore_map/json_file_helpers.hpp"
 
 // Alias for an easy class typing
 template <typename Key, typename Value>
@@ -32,18 +32,39 @@ using lru_xcache_t = typename caches::XCache<Key, Value, caches::LRUCachePolicy>
  * @brief MapCache is a two-level cache system with RAM and disk caching for map data.
  * @note This class uses LRU cache policy for both RAM and disk caches.
  * @note The disk cache stores map data as files in a specified directory, with filenames
- * corresponding to unique keys. The RAM cache holds the actual map data in memory for quick access.
+ *       corresponding to unique keys. The RAM cache holds the actual map data in memory for quick access.
  * @details The MapCache class provides a two-level caching mechanism for map data, utilizing
- * both RAM and disk storage. It employs LRU (Least Recently Used) cache policy for both
- * levels of caching to optimize data retrieval and storage efficiency. Items evicted from RAM 
- * cache will be inserted into disk cache and items on disk will be inserted back to 
- * RAM cache upon lookup. Cache contents are saved to disk upon exit (by the destructor), 
- * and reloaded for the next session (by the constructor). All of these transitions are transparent 
- * to users.
+ *          both RAM and disk storage. It employs LRU (Least Recently Used) cache policy for both
+ *          levels of caching to optimize data retrieval and storage efficiency. Items evicted from RAM 
+ *          cache will be inserted into disk cache and items on disk will be inserted back to 
+ *          RAM cache upon lookup. Cache contents are saved to disk upon exit (by the destructor), 
+ *          and reloaded for the next session (by the constructor). All of these transitions are transparent 
+ *          to users.
  */
 class MapCache
 {
 public:
+
+  /** @brief Default MapCache constructor
+   * @details This constructor initializes an empty MapCache with default parameters.
+   * @note A directory for disk cache must be set up later using set_up_file_cache_path() before using the cache.
+   */
+  MapCache() : my_file_cache_path( "" ), ram_cache_size( 64 ), disk_cache_size( 256 ), entry_count( 0 ), 
+    on_final_clear( false ), is_active( true ), debug_mode( false ), 
+    ram_cache( ram_cache_size, caches::LRUCachePolicy<std::string>(),
+      [this]( const std::string& key,
+        const lru_cache_t<std::string, nlohmann::json>::value_type& value_handle ) 
+      {
+        this->on_erase_callback_for_ram_cache( key, value_handle );
+      }),
+    disk_cache( disk_cache_size, caches::LRUCachePolicy<std::string>(),
+      [this]( const std::string& key,
+        const lru_cache_t<std::string, int>::value_type& value_handle ) 
+      {
+        this->on_erase_callback_for_disk_cache( key, value_handle );
+      })
+  {
+  };
 
   /** @brief MapCache constructor
    * @param[in] file_cache_path Path to the directory where disk cache files will be stored
@@ -52,8 +73,10 @@ public:
    * @param[in] active Boolean flag to activate or deactivate the cache
    * @param[in] debug Boolean flag to enable or disable debug mode
    */
-  MapCache( std::string file_cache_path, std::size_t ram_cache_size = 64, std::size_t disk_cache_size = 256, 
-    bool active = true, bool debug = false ) :
+  // MapCache( std::string file_cache_path, std::size_t ram_cache_size = 64, std::size_t disk_cache_size = 256, 
+  //   bool active = true, bool debug = false ) :
+   MapCache( const std::string& file_cache_path, const std::size_t ram_cache_size = 64, 
+    const std::size_t disk_cache_size = 256, const bool active = true, const bool debug = false ) :
     my_file_cache_path( file_cache_path ), ram_cache_size( ram_cache_size ), 
     disk_cache_size( disk_cache_size ), entry_count( 0 ), on_final_clear( false ), 
     is_active( active ), debug_mode( debug ),
@@ -70,71 +93,7 @@ public:
         this->on_erase_callback_for_disk_cache( key, value_handle );
       })
   {
-    // Ensure the cache directory exists
-    if( my_file_cache_path.empty() ) 
-    {
-      my_file_cache_path = "cache/"; // Use forward slash for cross-platform compatibility
-      if( debug_mode ) 
-      {
-        // Debugging line to see the cache path being used
-        std::cout << "MapCache::MapCache: Using file cache path: " << my_file_cache_path << std::endl;
-      }
-    }
-    if( !std::filesystem::is_directory( my_file_cache_path ) ) 
-    {
-      if( debug_mode ) 
-      {
-        std::cout << "MapCache::MapCache: Cache directory does not exist: " << my_file_cache_path << std::endl;
-        std::cout << "MapCache::MapCache: Creating cache directory at " << my_file_cache_path << std::endl;
-      }
-      if( !std::filesystem::create_directories( my_file_cache_path ) ) 
-      {
-        std::cerr << "MapCache::MapCache: Failed to create cache directory: " << my_file_cache_path << '\n';
-      }
-    }    
-    if( !my_file_cache_path.empty() && my_file_cache_path.back() != '/' ) 
-    {
-      my_file_cache_path += "/";
-    }
-    if( std::ifstream( my_file_cache_path + "cached.map" ) ) 
-    {
-      std::ifstream file( my_file_cache_path + "cached.map" );
-      std::string key;
-      int value;
-      if( debug_mode ) 
-      {
-        std::cout << "MapCache::MapCache: Loading previous disk cache contents from "
-          << my_file_cache_path + "cached.map" << std::endl;
-      }
-      while( file >> key >> value ) 
-      {
-        if( entry_count > disk_cache_size ) 
-        {
-          // Cache too small to hold previous contents
-          break;
-        }
-        if( debug_mode ) 
-        {
-          std::cout << "MapCache::MapCache: Putting key = " << key << " with entry number = " << entry_count 
-            << " into disk cache." << std::endl;
-        }
-        disk_cache.Put( key, value );
-        entry_count++;
-      }
-      file.close();
-      // Delete cached.map file after loading contents into memory
-      std::remove( ( my_file_cache_path + "cached.map" ).c_str() );
-    } 
-    else 
-    {
-      std::cout << "MapCache::MapCache: No previous cache found, fresh start (file cache path: " << 
-        my_file_cache_path << ")." << std::endl;
-    }
-    if( debug_mode ) 
-    {
-      // Debugging line to see file_cache_path
-      std::cout << "MapCache::MapCache: Still using file cache path: " << my_file_cache_path << std::endl;
-    }
+    set_up_file_cache_path( file_cache_path );
   }
 
   /** @brief MapCache destructor
@@ -148,8 +107,8 @@ public:
     if( debug_mode ) 
     {
       // Debugging line to see the final clear operation
-      std::cout << "MapCache::~MapCache: Final clear operation, saving disk cache entries to " << my_file_cache_path 
-        << "cached.map" << std::endl;
+      std::cout << "MapCache::~MapCache: Final clear operation, saving disk cache entries to " 
+        << my_file_cache_path << "cached.map" << std::endl;
     }
     std::cout << "MapCache::~MapCache: disk cache size: " << disk_cache.Size() << std::endl;
   }
@@ -185,46 +144,45 @@ public:
         << "cache.entry_" << entry_count << ".json" << std::endl;
       std::cout << "MapCache::put: Disk cache size: " << disk_cache.Size() << std::endl;
     }
-    MapDownloader::save_map( value, my_file_cache_path + "cache.entry_" + std::to_string( entry_count++ ) 
-      + ".json" );
+    JsonFileHelpers::save( value, my_file_cache_path + "cache.entry_" + std::to_string( entry_count++ ) 
+      + ".json", "MapCache::put" );
   }
 
   /** @brief Try to get a map data entry from the cache
    * @param[in] key Unique key identifying the map data
-   * @return A pair containing a shared pointer to the JSON object (or nullptr if not found)
-   *         and a boolean indicating whether the entry was found
+   * @return A shared pointer to the JSON object (or nullptr if not found)
    */
-  std::pair<lru_cache_t<std::string, nlohmann::json>::value_type, bool> try_get( const std::string& key ) 
+  lru_cache_t<std::string, nlohmann::json>::value_type try_get( const std::string& key ) 
   {
     if( is_active == false ) 
     {
       std::cerr << "MapCache::try_get: Cache is not active, cannot get item.\n";
-      return std::make_pair( nullptr, false );
+      return nullptr;
     }
-    // If the key is empty, return an empty json object and false
+    // If the key is empty, return a nullptr
     if( key.empty() ) 
     {
-      return std::make_pair( nullptr, false );
+      return nullptr;
     }
     // First, check the RAM cache
     std::pair<lru_cache_t<std::string, nlohmann::json>::value_type, bool> ram_pair = ram_cache.TryGet( key );
     if( ram_pair.second ) 
     {
       assert( ram_pair.first.get() != nullptr );
-      return ram_pair;
+      return ram_pair.first;
     }
     // If not found in RAM cache, check the disk cache
     std::pair<lru_xcache_t<std::string, int>::value_type, bool> disk_pair = disk_cache.TryGet( key );
     if( !disk_pair.second ) 
-    { // give up if not found in disk cache
+    { // Give up if not found in disk cache
       if( debug_mode ) 
       {
-        // Debugging line to see the key not found in cache
+        // Debugging line to see that the key was not found in cache
         std::cout << "MapCache::try_get: Key not found in cache: " << key << std::endl;
         // Debugging line to see the file_cache_path
         std::cout << "MapCache::try_get: file_cache_path: " << my_file_cache_path << std::endl;
       }
-      return std::make_pair( nullptr, false );
+      return nullptr;
     } 
     else 
     {
@@ -242,10 +200,10 @@ public:
       std::string filename = my_file_cache_path + "cache.entry_" + std::to_string( *disk_pair.first ) + ".json";
       std::shared_ptr<nlohmann::json> json_data_ptr = std::make_shared<nlohmann::json>();
       // Load the JSON data from the file
-      MapDownloader::load_map( filename, *json_data_ptr );
+      JsonFileHelpers::load( filename, *json_data_ptr, "MapCache::try_get" );
       // Insert item back into RAM cache
       ram_cache.Put( key, *json_data_ptr );
-      return std::make_pair( json_data_ptr, true );
+      return json_data_ptr;
     }
   }
 
@@ -275,6 +233,102 @@ public:
     }
   }
 
+  /** @brief Turn on debug mode
+   * @details When debug mode is turned on, debugging messages will be sent to stdout.
+   */
+  void set_debug_mode( const bool& debug )
+  {
+    debug_mode = debug;
+    if( debug_mode ) 
+    {
+      std::cout << "MapCache::set_debug_mode: debug mode is turned on, debugging messages will be sent to stdout." 
+        << std::endl;
+    } 
+  }
+
+  /** @brief Set up the file cache path
+   * @param[in] file_cache_path New path to the directory where disk cache files will be stored
+   */
+  void set_up_file_cache_path( const std::string& file_cache_path )
+  {
+    my_file_cache_path = file_cache_path;
+    // Ensure the cache directory exists
+    if( my_file_cache_path.empty() ) 
+    {
+      my_file_cache_path = "cache/"; // Use forward slash for cross-platform compatibility
+      if( debug_mode ) 
+      {
+        // Debugging line to see the cache path being used
+        std::cout << "MapCache::set_up_file_cache_path: " << my_file_cache_path << std::endl;
+      }
+    }
+    if( !std::filesystem::is_directory( my_file_cache_path ) ) 
+    {
+      if( debug_mode ) 
+      {
+        std::cout << "MapCache::set_up_file_cache_path: file che pathdoes not exist: " << my_file_cache_path << std::endl;
+        std::cout << "MapCache::set_up_file_cache_path: Creating cache directory at " << my_file_cache_path << std::endl;
+      }
+      if( !std::filesystem::create_directories( my_file_cache_path ) ) 
+      {
+        std::cerr << "MapCache::set_up_file_cache_path: Failed to create cache directory: " << my_file_cache_path << '\n';
+      }
+    }    
+    if( !my_file_cache_path.empty() && my_file_cache_path.back() != '/' ) 
+    {
+      my_file_cache_path += "/";
+    }
+    if( std::ifstream( my_file_cache_path + "cached.map" ) ) 
+    {
+      std::ifstream file( my_file_cache_path + "cached.map" );
+      if( !file.is_open() ) 
+      {
+        std::cerr << "MapCache::set_up_file_cache_path: Failed to open cached.map for reading: " 
+          << my_file_cache_path + "cached.map" << std::endl;
+        return;
+      }
+      std::string key;
+      int value;
+      if( debug_mode ) 
+      {
+        std::cout << "MapCache::set_up_file_cache_path: Loading previous disk cache contents from "
+          << my_file_cache_path + "cached.map" << std::endl;
+      }
+      while( file >> key >> value ) 
+      {
+        if( entry_count >= disk_cache_size ) 
+        {
+          // Cache too small to hold previous contents
+          break;
+        }
+        if( debug_mode ) 
+        {
+          std::cout << "MapCache::set_up_file_cache_path: Putting key = " << key << " with entry number = " << entry_count 
+            << " into disk cache." << std::endl;
+        }
+        disk_cache.Put( key, value );
+        entry_count++;
+      }
+      file.close();
+      // Delete cached.map file after loading contents into memory
+      std::remove( ( my_file_cache_path + "cached.map" ).c_str() );
+    } 
+    else 
+    {
+      if( debug_mode ) 
+      {
+        // Debugging line to see that no previous cache was found
+        std::cout << "MapCache::set_up_file_cache_path: MapCache: No previous cache found, fresh start (file cache path: " << 
+          my_file_cache_path << ")." << std::endl;
+      }
+    }
+    if( debug_mode ) 
+    {
+      // Debugging line to see file_cache_path
+      std::cout << "MapCache::set_up_file_cache_path: Still using file cache path: " << my_file_cache_path << std::endl;
+    }
+  }
+
 private:
 
   /** @brief Callback function invoked when an entry is evicted from the RAM cache
@@ -284,7 +338,7 @@ private:
   void on_erase_callback_for_ram_cache( const std::string& key, 
       const lru_cache_t<std::string, nlohmann::json>::value_type& value_handle ) 
   {
-    if( disk_cache.TryGet( key ).second || entry_count > disk_cache_size-1 )
+    if( disk_cache.TryGet( key ).second || entry_count >= disk_cache_size )
     {
       if( debug_mode )
       {
@@ -303,8 +357,8 @@ private:
       std::cout << "MapCache::on_erase_callback_for_ram_cache: Saving entry to disk cache at " << my_file_cache_path
         << "cache.entry_" << entry_count << ".json" << std::endl;
     }
-    MapDownloader::save_map( *value_handle, my_file_cache_path + "cache.entry_" + std::to_string( entry_count++ ) 
-      + ".json" );
+    JsonFileHelpers::save( *value_handle, my_file_cache_path + "cache.entry_" + std::to_string( entry_count++ )
+      + ".json", "MapCache::on_erase_callback_for_ram_cache" );
   }
 
   /** @brief Callback function invoked when an entry is evicted from the disk cache
@@ -351,7 +405,6 @@ private:
     }
   }
 
-  //std::string file_cache_path;
   std::string my_file_cache_path;
   const size_t ram_cache_size;
   const size_t disk_cache_size;

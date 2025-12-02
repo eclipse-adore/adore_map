@@ -16,85 +16,23 @@
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <fstream>
-#include "adore_map/map_cache.hpp"
 #include "adore_map/map_downloader.hpp"
-
-// Default constructor for MapDownloader
-MapDownloader::MapDownloader()
-  : curl( nullptr ), read_buffer( "" ), server_url( "" ), username( "" ), password( "" ), project_name( "" ), 
-  bounding_box( 0.0, 0.0, 0.0, 0.0, "" ), file_cache_path( "" ), debug_mode( false ), map_cache( new MapCache( file_cache_path ) ) {}
+#include "adore_map/json_file_helpers.hpp"
 
 // Parameterized constructor for MapDownloader
 MapDownloader::MapDownloader( const std::string& server_url, const std::string& username, 
   const std::string& password, const std::string& project_name, const BoundingBox& bounding_box, 
-  std::string file_cache_path, const bool debug) : curl( nullptr ), read_buffer( "" ), server_url( server_url ), 
-  username( username ), password( password ), project_name( project_name ), bounding_box( bounding_box ), 
-  file_cache_path( file_cache_path ), debug_mode( debug ), map_cache( new MapCache( file_cache_path, 64, 256, true, 
-    debug ) ) {}
-
-// Destructor for MapDownloader
-MapDownloader::~MapDownloader() 
+  const std::string& file_cache_path, const bool curl_global_init, const bool curl_global_cleanup, 
+  const bool debug ) : server_url( server_url ), project_name( project_name ), bounding_box( bounding_box ), 
+  debug_mode( debug )
 {
-  cleanup();
-  unload_map();
-  delete map_cache; // Clean up the MapCache instance
-}
-
-// cURL write callback function
-size_t MapDownloader::write_callback( char* ptr, size_t size, size_t nmemb, void* userdata )
-{
-  // Cast userdata to std::string pointer and append the received data
-  // ptr is a pointer to the data received from cURL
-  // size is the size of each element, nmemb is the number of elements
-  ( (std::string*) userdata )->append( ptr, size * nmemb );
-  return size * nmemb;
-}
-
-// Initializes the MapDownloader instance by setting up cURL
-bool MapDownloader::initialize() {
-  return initialize_curl( username, password, &curl, &read_buffer ) == CURLE_OK;
-}
-
-// Static method to initialize cURL
-CURLcode MapDownloader::initialize_curl( const std::string& username, const std::string& password, CURL **curl, 
-  std::string* read_buffer )
-{
-  // Initialize global cURL environment
-  curl_global_init( CURL_GLOBAL_ALL );
-
-  // Initialize cURL
-  *curl = curl_easy_init();
-  if( !*curl )
+  map_cache.set_up_file_cache_path( file_cache_path );
+  map_cache.set_debug_mode( debug );
+  curl_wrapper = CurlWrapper::make( curl_global_init, curl_global_cleanup, debug_mode );
+  if( curl_wrapper )
   {
-    // Something went wrong
-    curl_global_cleanup();
-    return CURLE_FAILED_INIT; // Return an error code if cURL initialization failed
+    curl_wrapper->set_general_options( username, password );
   }
-
-  curl_easy_setopt( *curl, CURLOPT_WRITEFUNCTION, MapDownloader::write_callback );
-  curl_easy_setopt( *curl, CURLOPT_USERAGENT, "libcurl-agent/1.0" );
-  curl_easy_setopt( *curl, CURLOPT_USERNAME, username.c_str() );
-  curl_easy_setopt( *curl, CURLOPT_PASSWORD, password.c_str() );
-  curl_easy_setopt( *curl, CURLOPT_WRITEDATA, read_buffer );
-  return CURLE_OK; // Return success code
-}
-
-// Cleans up the MapDownloader instance by releasing cURL resources
-void MapDownloader::cleanup()
-{
-  curl_cleanup( curl );
-  curl = nullptr;
-}
-
-// Static method to clean up cURL resources
-void MapDownloader::curl_cleanup( CURL *curl )
-{
-  if( curl ) {
-    // This function cleans up the cURL environment
-    // It is called after the cURL operations are done
-    curl_easy_cleanup(curl);
-  }
-  curl_global_cleanup();
 }
 
 // Downloads map data for a specific layer
@@ -109,58 +47,51 @@ bool MapDownloader::download_map( const std::string& layer_name, const BoundingB
   return download_map_as_json( layer_name, bounding_box );
 }
 
-// Downloads map data as JSON using cURL
-CURLcode MapDownloader::download_map( CURL *curl, const std::string& server_url, const std::string& project_name, 
-  const std::string& layer_name, const BoundingBox& bounding_box, std::string* read_buffer )
+// Downloads map data for a specific layer within a bounding box (flexible version)
+bool MapDownloader::download_map( const std::string& server_url, const std::string& project_name, 
+  const std::string& layer_name, const BoundingBox& bounding_box )
 {
-  return download_map_as_json( curl, server_url, project_name, layer_name, bounding_box, read_buffer );
+  return download_map_as_json( server_url, project_name, layer_name, bounding_box );
 }
 
-// Downloads map data as JSON for a specific layer
+// Downloads map data as JSON for a specific layer (private version)
 bool MapDownloader::download_map_as_json( const std::string& layer_name )
 {
-  return download_map_as_json( curl, server_url, project_name, layer_name, bounding_box, &read_buffer ) == CURLE_OK;
+  return download_map_as_json( server_url, project_name, layer_name, bounding_box );
 }
 
-// Downloads map data as JSON for a specific layer within a bounding box
+// Downloads map data as JSON for a specific layer within a bounding box (private version)
 bool MapDownloader::download_map_as_json( const std::string& layer_name, const BoundingBox& bounding_box )
 {
-  return download_map_as_json( curl, server_url, project_name, layer_name, bounding_box, &read_buffer ) == CURLE_OK;
+  return download_map_as_json( server_url, project_name, layer_name, bounding_box );
 }
 
-// Downloads map data as JSON using cURL
-CURLcode MapDownloader::download_map_as_json( CURL *curl, const std::string& server_url, 
-  const std::string& project_name, const std::string& layer_name, const BoundingBox& bounding_box, 
-  std::string* read_buffer )
+// Downloads map data as JSON (private flexible version)
+bool MapDownloader::download_map_as_json( const std::string& server_url, 
+  const std::string& project_name, const std::string& layer_name, const BoundingBox& bounding_box )
 {
-  if( read_buffer == nullptr )
-  {
-    throw std::invalid_argument( "MapDownloader::download_map_as_json: Null read_buffer passed." );
-  }
   std::string url_key = server_url + project_name + "/" + layer_name + "&" + bounding_box.to_string();
   // Check if the map is already in the cache
-  if( map_cache != nullptr )
+  auto cached_map = map_cache.try_get( url_key );
+  if( cached_map != nullptr )
   {
-    auto cached_map = map_cache->try_get( url_key );
-    if( cached_map.second )
+    // If the map is found in the cache, load it from there
+    json_data = *cached_map;
+    if( debug_mode ) 
     {
-      // If the map is found in the cache, load it from there
-      json_data = *cached_map.first;
-      if( debug_mode ) 
-      {
-        // Debugging line to see the key being requested from cache
-        std::cout << "MapDownloader::download_map_as_json: Map found in cache for key: " << url_key << std::endl;
-        // Debugging line to see the JSON data being pretty printed
-        std::cout << "MapDownloader::download_map_as_json: Pretty printing cached map data." << std::endl;
-        pretty_print_map( json_data );
-      }
-      return CURLE_OK; // Return success code
+      // Debugging line to see the key being requested from cache
+      std::cout << "MapDownloader::download_map_as_json: Map found in cache for key: " << url_key << std::endl;
+      // Debugging line to see the JSON data being pretty printed
+      std::cout << "MapDownloader::download_map_as_json: Pretty printing cached map data." << std::endl;
+      pretty_print_map( json_data );
     }
+    return true;
   }
   // Loading a map as JSON from a WFS (Web Feature Service) server
   // Using cURL to perform the HTTP request and retrieve the JSON data
-  if( curl )
+  if( curl_wrapper ) 
   {
+    assert( curl_wrapper->get_curl() != nullptr ); // by this point curl must be initialized
     // Set cURL options
     std::string url = server_url + project_name + "/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=" 
       + layer_name + "&outputFormat=application/json" + bounding_box.to_query_string();
@@ -169,59 +100,63 @@ CURLcode MapDownloader::download_map_as_json( CURL *curl, const std::string& ser
       // Debugging line to see the constructed URL
       std::cout << "MapDownloader::download_map_as_json: Constructed URL: " << url << std::endl;
     }
-    curl_easy_setopt( curl, CURLOPT_URL, url.c_str() );
-    CURLcode res = curl_easy_perform( curl );
-    if( res != CURLE_OK )
+    if( curl_wrapper->download( url ) != CURLE_OK )
     {
-      std::cerr << "MapDownloader::download_map_as_json: cURL error: " << curl_easy_strerror( res ) << std::endl;
-      return res; // Return the error code if cURL operation failed
+      std::cerr << "MapDownloader::download_map_as_json: cURL download failed for URL: " << url << std::endl;
+      return false;
     }
-    if( read_buffer->empty() )
-    {
-      std::cerr << "MapDownloader::download_map_as_json: No data received from server for URL: " << url << std::endl;
-      return CURLE_RECV_ERROR; // Return an error if no  data was received
-    }
-    // Parse the JSON data from the read buffer
-    parse_json( *read_buffer, json_data );
+    parse_json(); // parse into member json_data
     // Put the map into the cache
-    map_cache->put( url_key, json_data );
-    // Clear the read buffer for the next request
-    read_buffer->clear();
+    map_cache.put( url_key, json_data );
     if( debug_mode ) 
     {
       // Debugging line to see the key being saved to cache
       std::cout << "MapDownloader::download_map_as_json: Map put into cache for key: " << url_key << std::endl;
     }
-    // If the map was successfully downloaded and parsed, return success code
-    return res;
+    // Since the map was successfully downloaded and parsed, return true
+    return true;
   }
-  return CURLE_FAILED_INIT; // Return an error if cURL is not initialized
+  std::cerr << "MapDownloader::download_map_as_json: cURL wrapper and cURL are not initialized." << std::endl;
+  return false; // Return false if cURL is not initialized
 }
 
 // Unloads the map data from memory
 void MapDownloader::unload_map()
 {
-  read_buffer.clear(); // Clear the read buffer
+  curl_wrapper->get_read_buffer().clear(); // Clear the read buffer
   json_data.clear(); // Clear the JSON data as well
 }
 
-// Unloads the map data from memory 
-void MapDownloader::unload_map( std::string* read_buffer, nlohmann::json& json_data )
+// Unloads the map data from memory (more flexible version)
+void MapDownloader::unload_map( nlohmann::json& json_data )
 {
-  if( read_buffer )
-  {
-    read_buffer->clear(); // Clear the read buffer
-  }
+  curl_wrapper->get_read_buffer().clear(); // Clear the read buffer
   json_data.clear(); // Clear the JSON data as well
+}
+
+// Parses JSON data from the internal read buffer and populates the internal JSON data object
+void MapDownloader::parse_json()
+{
+  parse_json( curl_wrapper->get_read_buffer(), json_data );
+}
+
+// Parses JSON data from a string and populates the internal JSON data object
+void MapDownloader::parse_json( const std::string& json_str )
+{
+  parse_json( json_str, json_data );
+}
+
+// Parses JSON data from the internal read buffer and populates the provided JSON data object
+void MapDownloader::parse_json( nlohmann::json& json_data )
+{
+  parse_json( curl_wrapper->get_read_buffer(), json_data );
 }
 
 // Parses JSON data from a string
+// Populates the provided json_data object with the parsed data
 void MapDownloader::parse_json( const std::string& json_str, nlohmann::json& json_data )
 {
-  if( json_data.empty() )
-  {
-    json_data = nlohmann::json::parse( json_str );
-  }
+  json_data = nlohmann::json::parse( json_str );
 }
 
 // Pretty prints the map data stored in json_data
@@ -250,57 +185,25 @@ void MapDownloader::save_map( const std::string& filename )
 // Saves the map data from a given JSON object to a file
 void MapDownloader::save_map( const nlohmann::json& json_data, const std::string& filename )
 {
-  save_json( json_data, filename );
-}
-
-// Saves the map data from a JSON string to a file
-void MapDownloader::save_map( const std::string& json_str, const std::string& filename )
-{
-  nlohmann::json json_data;
-  parse_json( json_str, json_data );
-  save_json( json_data, filename );
+  JsonFileHelpers::save( json_data, filename, "MapDownloader::save_map(json_data, filename)" );
 }
 
 // Saves the map data stored in json_data to a file
 void MapDownloader::save_json( const std::string& filename )
 {
-  save_json( json_data, filename );
-}
-
-// Saves the map data from a given JSON object to a file
-void MapDownloader::save_json( const nlohmann::json& json_data, const std::string& filename )
-{
-  std::ofstream file( filename );
-  if( file.is_open() )
-  {
-    file << json_data.dump();
-    file.close();
-  }
-  else
-  {
-    std::cerr << "MapDownloader::save_json: Failed to create JSON file: " << filename << std::endl;
-  }
+  JsonFileHelpers::save( json_data, filename, "MapDownloader::save_json(filename)" );
 }
 
 // Loads the map data from a file into member variable json_data
 void MapDownloader::load_map( const std::string& filename )
 {
-  load_map( filename, json_data );
+  JsonFileHelpers::load( filename, json_data, "MapDownloader::load_map(filename)" );
 }
 
 // Loads the map data from a file into a given JSON object
 void MapDownloader::load_map( const std::string& filename, nlohmann::json& json_data )
 {
-  std::ifstream file( filename );
-  if( file.is_open() )
-  {
-    file >> json_data;
-    file.close();
-  } 
-  else
-  {
-    std::cerr << "MapDownloader::load_map: Failed to open JSON file: " << filename << std::endl;
-  }
+  JsonFileHelpers::load( filename, json_data, "MapDownloader::load_map(filename, json_data)" );
 }
 
 // Delegatory methods to turn off and on the cache
@@ -310,20 +213,11 @@ void MapDownloader::load_map( const std::string& filename, nlohmann::json& json_
 // Turns off the map cache
 void MapDownloader::turn_off_cache()
 {
-  if( map_cache == nullptr )
-  {
-    std::cerr << "MapDownloader::turn_off_cache(): MapCache is not initialized, cannot turn off cache." << std::endl;
-    return;
-  }
-  map_cache->turn_off();
+  map_cache.turn_off();
 }
 
 // Turns on the map cache
 void MapDownloader::turn_on_cache()
 {
-    if( map_cache == nullptr ) {
-      std::cerr << "MapDownloader::turn_ofn_cache(): MapCache is not initialized, cannot turn on cache." << std::endl;
-      return;
-    }
-    map_cache->turn_on();
+  map_cache.turn_on();
 }
