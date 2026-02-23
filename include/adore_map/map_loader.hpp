@@ -17,6 +17,7 @@
 
 #include "adore_map/map.hpp"
 #include "adore_map/r2s_parser.h"
+#include "adore_map/map_downloader.hpp"
 
 #include "OpenDriveMap.h"
 #include "RoutingGraph.h"
@@ -46,6 +47,16 @@ public:
 
   static Map load_from_file( const std::string& map_file_location, bool allow_lane_changes = true, bool ignore_non_driving = false );
 
+  /** @brief Downloads map data from a WFS server and constructs a Map object
+   * @param[in] downloader MapDownloader instance to use for downloading map data
+   * @param[in] reference_lines_layer_name Name of the layer containing reference lines
+   * @param[in] lane_borders_layer_name Name of the layer containing lane borders
+   * @param[in] allow_lane_changes Boolean flag to indicate whether lane changes should be allowed in the resulting Map
+   * @param[in] ignore_non_driving Boolean flag to indicate whether non-driving lanes should be ignored in the resulting Map
+   * @return A Map object constructed from the downloaded map data
+   */
+  static Map download_from_wfs( MapDownloader& downloader, const std::string& reference_lines_layer_name, 
+    const std::string& lane_borders_layer_name, bool allow_lane_changes = true, bool ignore_non_driving = false );
 
 private:
 

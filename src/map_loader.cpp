@@ -65,6 +65,20 @@ MapLoader::load_from_r2s_file( const std::string& map_file_location, bool allow_
   return map;
 }
 
+Map
+MapLoader::download_from_wfs( MapDownloader& downloader, const std::string& reference_lines_layer_name, 
+  const std::string& lane_borders_layer_name, bool allow_lane_changes, bool /*ignore_non_driving*/ )
+{
+  Map map;
+
+  auto border_data_r2sr = adore::r2s::download_reference_lines( downloader, reference_lines_layer_name );
+  auto border_data_r2sl = adore::r2s::download_lane_borders( downloader, lane_borders_layer_name );
+
+  create_from_r2s( map, border_data_r2sr, border_data_r2sl, allow_lane_changes );
+
+  return map;
+}
+
 void
 MapLoader::create_from_r2s( Map& map, const std::vector<r2s::BorderDataR2SR>& standard_lines,
                             const std::vector<r2s::BorderDataR2SL>& lane_boundaries, bool allow_lane_changes )

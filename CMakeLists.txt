@@ -14,6 +14,8 @@ find_package(adore_math REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(PROJ REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(CURL REQUIRED) 
+find_package(caches REQUIRED)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   add_compile_options(-O3)
@@ -41,6 +43,8 @@ target_link_libraries(${PROJECT_NAME}
     adore_math::adore_math
     PROJ::proj
     Eigen3::Eigen
+    CURL::libcurl
+    caches::caches
     # Add ${OpenCV_LIBS} here if you have compiled OpenCV dependencies.
 )
 
@@ -82,7 +86,7 @@ install(EXPORT export_${PROJECT_NAME}
 
 # ament exports for ROS 2 packages
 ament_export_include_directories(include)
-ament_export_dependencies(OpenDrive PROJ adore_math OpenCV Eigen3)
+ament_export_dependencies(OpenDrive PROJ adore_math OpenCV Eigen3 caches)
 ament_export_targets(export_${PROJECT_NAME})
 
 ament_package()

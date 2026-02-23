@@ -9,6 +9,9 @@
   <depend>adore_math</depend>
   <depend>libproj-dev</depend>
   <depend>libOpenDrive</depend>
+  <!-- new: -->
+  <depend>libcurl</depend>
+  <!-- -->
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
