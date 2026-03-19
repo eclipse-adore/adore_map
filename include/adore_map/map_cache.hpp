@@ -179,8 +179,14 @@ public:
         entry_count++;
       }
       file.close();
-      // Delete cached.map file after loading contents into memory
-      std::remove( ( my_file_cache_path + "cached.map" ).c_str() );
+      // Delete previous copy of the cached.map file if it exists
+      std::remove( ( my_file_cache_path + "cached.map.backup" ).c_str() );
+      // Rename the current cached.map file to cached.map.backup as a backup      
+      if( std::rename( ( my_file_cache_path + "cached.map" ).c_str(), 
+        ( my_file_cache_path + "cached.map.backup" ).c_str() ) != 0 )
+      {
+        std::cerr << "MapCache::set_up_file_cache_path: Failed to rename cached.map to cached.map.backup." << std::endl;
+      }
     } 
     else 
     {

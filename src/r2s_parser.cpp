@@ -263,13 +263,13 @@ parse_reference_lines( MapDownloader& downloader )
         {
           border.predecessor_id = properties.value( "predecessor_id", 0 );
         }
-        if( properties[ "datasource_description_id" ].is_null() )
+        if( properties[ "datasourcedescription_id" ].is_null() )
         {
           border.datasource_description_id = 0;
         }
         else
         {
-          border.datasource_description_id = properties.value( "datasource_description_id", 0 );
+          border.datasource_description_id = properties.value( "datasourcedescription_id", 0 );
         }
         if( properties[ "turn" ].is_null() || properties[ "turn" ].get<std::string>().empty() )
         {
@@ -398,12 +398,12 @@ parse_lane_borders( MapDownloader& downloader )
         {
           border.parent_id = properties.value( "parent_id" , 0);
         }
-        if( properties[ "datasource_description_id" ].is_null() ) {
+        if( properties[ "datasourcedescription_id" ].is_null() ) {
           border.datasource_description_id = 0;
         }
         else
         {
-          border.datasource_description_id = properties.value( "datasource_description_id" , 0 );
+          border.datasource_description_id = properties.value( "datasourcedescription_id" , 0 );
         }
         if( properties[ "material" ].is_null() || properties[ "material" ].get<std::string>().empty() ) {
           border.material = "NULL";

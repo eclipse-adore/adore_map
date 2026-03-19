@@ -77,19 +77,33 @@ public:
   void 
   clear()
   {
-    operation_guard lock{ safe_op };
+    // Collect iterators to all elements in the cache
+    std::vector<const_iterator> elems;
     for( const_iterator it = base_type::begin(); it != base_type::end(); )
-    { 
+    {
+      elems.push_back( it++ );
+    }
+    // Sort the iterators to the elements in the order they were added to the cache (oldest first)
+    // This ensures that the order of entries in cached.map stays the same if no new entries have been added
+    std::sort( elems.begin(), elems.end(), []( const_iterator a, const_iterator b )
+                                           {
+                                             return *a->second < *b->second; // Ascending order based on value
+                                           } );
+
+    operation_guard lock{ safe_op };
+    for( const_iterator elem : elems ) {
       if( debug_mode )
       {
-        std::cout << "XCache::clear: Erasing element with key: " << it->first << std::endl;
+        std::cout << "XCache::clear: Erasing element with key: " << elem->first << std::endl;
       }
-      base_type::Erase( it++ ); 
+      base_type::Erase( elem ); 
       if( debug_mode )
       {
         std::cout << "XCache::clear: Erased element." << std::endl;
       }
     }
+
+    elems.clear();
   }
 private: 
 
