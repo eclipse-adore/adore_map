@@ -15,7 +15,7 @@ find_package(OpenCV REQUIRED)
 find_package(PROJ REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(CURL REQUIRED) 
-find_package(caches CONFIG REQUIRED PATHS ${CMAKE_INSTALL_PREFIX}/../caches/lib/cmake/caches)
+find_package(caches CONFIG REQUIRED)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   add_compile_options(-O3)
