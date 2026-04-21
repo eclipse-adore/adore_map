@@ -153,6 +153,23 @@ public:
     }
     return false;
   }
+  
+  template<typename Point>
+  std::optional<double>
+  get_nearest_lane_width(const Point& point )
+  {
+    double min_dist   = std::numeric_limits<double>::max();
+    auto   near_point = quadtree.get_nearest_point( point, min_dist );
+
+    if( !near_point )
+      return {};
+
+    if( lanes.count( near_point->parent_id ) == 0 )
+      return {};
+
+    double lane_width = lanes[near_point->parent_id]->get_width( near_point->s );
+    return lane_width;
+  }
 
   template<typename Point>
   double
