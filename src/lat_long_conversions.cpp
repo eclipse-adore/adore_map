@@ -112,22 +112,20 @@ convert_lat_lon_to_utm( double lat, double lon )
   {
     PJ_CONTEXT* C = proj_context_create();
     if( !C )
-    {
       throw std::runtime_error( "Failed to create PROJ context." );
-    }
 
     int  utm_zone   = calculate_utm_zone( lon );
     char utm_letter = calculate_utm_zone_letter( lat );
 
     std::string proj_string = "+proj=utm +zone=" + std::to_string( utm_zone ) + " +datum=WGS84";
     if( lat >= 0 )
-    {
       proj_string += " +north";
-    }
     else
-    {
       proj_string += " +south";
-    }
+
+    //std::cerr << "[lat_lon_to_utm] IN: lat=" << lat << " lon=" << lon
+    //          << " zone=" << utm_zone << " letter=" << utm_letter
+    //         << " proj=\"" << proj_string << "\"" << std::endl;
 
     PJ* P = proj_create( C, proj_string.c_str() );
     if( !P )
@@ -136,37 +134,28 @@ convert_lat_lon_to_utm( double lat, double lon )
       throw std::runtime_error( "Failed to create PROJ projection." );
     }
 
-    PJ* P_latlong = proj_create( C, "+proj=latlong +datum=WGS84" );
-    if( !P_latlong )
-    {
-      proj_destroy( P );
-      proj_context_destroy( C );
-      throw std::runtime_error( "Failed to create PROJ latlong projection." );
-    }
-
     PJ_COORD input = { 0 };
     input.lp.lam   = lon * DEG_TO_RAD;
     input.lp.phi   = lat * DEG_TO_RAD;
 
-    PJ_COORD output_coord = proj_trans( P_latlong, PJ_FWD, input );
-    output_coord          = proj_trans( P, PJ_FWD, output_coord );
+    PJ_COORD output_coord = proj_trans( P, PJ_FWD, input );
 
-    if( output_coord.xyzt.t == HUGE_VAL )
+    if( proj_errno( P ) != 0 )
     {
       proj_destroy( P );
-      proj_destroy( P_latlong );
       proj_context_destroy( C );
       throw std::runtime_error( "Invalid coordinate" );
     }
 
-    output[0] = output_coord.enu.e;                // UTM X coordinate
-    output[1] = output_coord.enu.n;                // UTM Y coordinate
-    //std::cerr << "utm x: " << output[0] << " utm y: " << output[1] << std::endl;
-    output[2] = static_cast<double>( utm_zone );   // UTM zone as double
-    output[3] = static_cast<double>( utm_letter ); // UTM letter as double
+    //std::cerr << "[lat_lon_to_utm] OUT: x=" << output_coord.xy.x
+    //          << " y=" << output_coord.xy.y << std::endl;
+
+    output[0] = output_coord.xy.x;
+    output[1] = output_coord.xy.y;
+    output[2] = static_cast<double>( utm_zone );
+    output[3] = static_cast<double>( utm_letter );
 
     proj_destroy( P );
-    proj_destroy( P_latlong );
     proj_context_destroy( C );
   }
   catch( const std::exception& e )
@@ -181,23 +170,23 @@ convert_lat_lon_to_utm( double lat, double lon )
 std::vector<double>
 convert_utm_to_lat_lon( double utm_x, double utm_y, int utm_zone, const std::string& utm_zone_letter )
 {
-  std::vector<double> output( 2, 0.0 );
+  std::lock_guard<std::mutex> lock( proj_mutex );
 
-  PJ_CONTEXT* C = proj_context_create();
-  if( !C )
-  {
-    throw std::runtime_error( "Failed to create PROJ context." );
-  }
+  std::vector<double> output( 2, 0.0 );
 
   std::string proj_string = "+proj=utm +zone=" + std::to_string( utm_zone ) + " +datum=WGS84";
   if( utm_zone_letter >= "N" )
-  {
     proj_string += " +north";
-  }
   else
-  {
     proj_string += " +south";
-  }
+
+  //std::cerr << "[utm_to_lat_lon] IN: utm_x=" << utm_x << " utm_y=" << utm_y
+  //          << " zone=" << utm_zone << " letter=" << utm_zone_letter
+  //          << " proj=\"" << proj_string << "\"" << std::endl;
+
+  PJ_CONTEXT* C = proj_context_create();
+  if( !C )
+    throw std::runtime_error( "Failed to create PROJ context." );
 
   PJ* P = proj_create( C, proj_string.c_str() );
   if( !P )
@@ -216,10 +205,12 @@ convert_utm_to_lat_lon( double utm_x, double utm_y, int utm_zone, const std::str
     throw std::runtime_error( "Coordinate transformation failed." );
   }
 
-  output[0] = output_coord.lp.phi * 180.0 / M_PI; // Latitude in degrees
-  output[1] = output_coord.lp.lam * 180.0 / M_PI; // Longitude in degrees
+  //std::cerr << "[utm_to_lat_lon] OUT: phi(lat)=" << output_coord.lp.phi * 180.0 / M_PI
+  //          << " lam(lon)=" << output_coord.lp.lam * 180.0 / M_PI << std::endl;
 
-  // Clean up PROJ objects
+  output[0] = output_coord.lp.phi * 180.0 / M_PI;
+  output[1] = output_coord.lp.lam * 180.0 / M_PI;
+
   proj_destroy( P );
   proj_context_destroy( C );
 
