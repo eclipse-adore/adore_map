@@ -18,6 +18,10 @@
 #include <unordered_set>
 #include <vector>
 
+#include <algorithm>  //new
+#include <cmath>  //new 
+#include <limits> //new
+
 #include "adore_map/lane.hpp"
 #include "adore_map/map.hpp"
 #include "adore_map/quadtree.hpp"
@@ -136,8 +140,10 @@ Route::get_s( const State& state ) const
 
   double dist_along_sec = near_sec->start_s < near_sec->end_s ? ( nearest->s - near_sec->start_s ) : near_sec->start_s - nearest->s;
 
+  //double route_distance = near_sec->route_s + dist_along_sec;
+  //return refine_s_with_arc( *nearest, route_distance );
   double route_distance = near_sec->route_s + dist_along_sec;
-  return refine_s_with_arc( *nearest, route_distance );
+  return refine_s_with_arc( state, route_distance );
 }
 
 template<typename TPoint>
@@ -287,78 +293,224 @@ double
 Route::refine_s_with_arc( const PLike& pos, double coarse_s ) const
 {
   /* 0.  need at least three samples                                    */
-  if( reference_line.size() < 3 )
+  if( reference_line.size() < 3 || !std::isfinite( coarse_s ) )
+  {
     return coarse_s;
+  }
 
   /* 1.  locate the nearest MapPoint on the 1-m centre-lane grid        */
-  auto it_hi   = reference_line.lower_bound( coarse_s );
-  auto nearest = ( it_hi == reference_line.end() )                                                          ? std::prev( it_hi )
-               : ( it_hi == reference_line.begin() )                                                        ? it_hi
-               : ( std::abs( coarse_s - std::prev( it_hi )->first ) < std::abs( coarse_s - it_hi->first ) ) ? std::prev( it_hi )
-                                                                                                            : it_hi;
+  auto it_hi = reference_line.lower_bound( coarse_s );
+
+  auto nearest =
+    ( it_hi == reference_line.end() )
+      ? std::prev( it_hi )
+      : ( it_hi == reference_line.begin() )
+          ? it_hi
+          : ( std::abs( coarse_s - std::prev( it_hi )->first ) <
+              std::abs( coarse_s - it_hi->first ) )
+              ? std::prev( it_hi )
+              : it_hi;
 
   if( nearest == reference_line.begin() )
-    return coarse_s; // no p_prev
+  {
+    return coarse_s;
+  }
+
   auto it_prev = std::prev( nearest );
   auto it_next = std::next( nearest );
+
   if( it_next == reference_line.end() )
-    return coarse_s; // no p_next
+  {
+    return coarse_s;
+  }
 
   const MapPoint& p0 = it_prev->second;
   const MapPoint& p1 = nearest->second;
   const MapPoint& p2 = it_next->second;
 
   double p0_s = it_prev->first;
-  double p1_s = nearest->first;
+  //double p1_s = nearest->first;
   double p2_s = it_next->first;
 
 
   /* 2.  fit circle through p0-p1-p2 (barycentric formula)              */
-  double a = p0.x * ( p1.y - p2.y ) - p0.y * ( p1.x - p2.x ) + p1.x * p2.y - p2.x * p1.y;
+  const double a =
+    p0.x * ( p1.y - p2.y )
+    - p0.y * ( p1.x - p2.x )
+    + p1.x * p2.y
+    - p2.x * p1.y;
+
+  // Nearly straight local segment: do not force an unstable circle fit.
   if( std::fabs( a ) < 1e-6 )
-    a = 1e-6;
+  {
+    return coarse_s;
+  }
 
   const double sq0 = p0.x * p0.x + p0.y * p0.y;
   const double sq1 = p1.x * p1.x + p1.y * p1.y;
   const double sq2 = p2.x * p2.x + p2.y * p2.y;
 
-  const double cx = ( sq0 * ( p2.y - p1.y ) + sq1 * ( p0.y - p2.y ) + sq2 * ( p1.y - p0.y ) ) / ( 2.0 * a );
-  const double cy = ( sq0 * ( p1.x - p2.x ) + sq1 * ( p2.x - p0.x ) + sq2 * ( p0.x - p1.x ) ) / ( 2.0 * a );
-  const double r  = std::hypot( p1.x - cx, p1.y - cy );
+  const double cx =
+    ( sq0 * ( p2.y - p1.y )
+    + sq1 * ( p0.y - p2.y )
+    + sq2 * ( p1.y - p0.y ) ) / ( 2.0 * a );
+
+  const double cy =
+    ( sq0 * ( p1.x - p2.x )
+    + sq1 * ( p2.x - p0.x )
+    + sq2 * ( p0.x - p1.x ) ) / ( 2.0 * a );
+
+  const double r = std::hypot( p1.x - cx, p1.y - cy );
+
+  if( !std::isfinite( cx ) || !std::isfinite( cy ) || !std::isfinite( r ) )
+  {
+    return coarse_s;
+  }
 
   /* 3.  radial projection of ego position onto the circle              */
   const double dx = pos.x - cx;
   const double dy = pos.y - cy;
   const double n2 = dx * dx + dy * dy;
-  if( n2 < 1e-9 )
-    return coarse_s; // at centre
 
-  const double k  = r / std::sqrt( n2 );
+  if( n2 < 1e-9 )
+  {
+    return coarse_s;
+  }
+
+  const double k = r / std::sqrt( n2 );
   const double px = cx + k * dx;
   const double py = cy + k * dy;
 
-  auto ang = [&]( double x, double y ) { return std::atan2( y - cy, x - cx ); };
+  auto ang = [&]( double x, double y )
+  {
+    return std::atan2( y - cy, x - cx );
+  };
+
+  auto norm = []( double angle )
+  {
+    while( angle > M_PI )
+    {
+      angle -= 2.0 * M_PI;
+    }
+    while( angle < -M_PI )
+    {
+      angle += 2.0 * M_PI;
+    }
+    return angle;
+  };
 
   const double a0 = ang( p0.x, p0.y );
   const double a2 = ang( p2.x, p2.y );
   const double ap = ang( px, py );
 
-  /* normalise signed angles to  |θ|≤π                                   */
-  auto norm = []( double a ) {
-    while( a > M_PI )
-      a -= 2 * M_PI;
-    while( a < -M_PI )
-      a += 2 * M_PI;
-    return a;
-  };
   const double theta = norm( a2 - a0 );
   const double phi   = norm( ap - a0 );
 
-  const bool inside_arc = ( theta >= 0.0 ) ? ( phi >= 0.0 && phi <= theta ) : ( phi <= 0.0 && phi >= theta );
+  if( !std::isfinite( theta ) ||
+      !std::isfinite( phi ) ||
+      std::fabs( theta ) < 1e-9 )
+  {
+    return coarse_s;
+  }
+
+  const bool inside_arc =
+    theta >= 0.0
+      ? ( phi >= 0.0 && phi <= theta )
+      : ( phi <= 0.0 && phi >= theta );
+
+  if( !inside_arc )
+  {
+    return coarse_s;
+  }
 
   /* 4.  convert angular offset to station                              */
-  const double ratio = ( std::fabs( theta ) < 1e-9 ) ? 0.0 : phi / theta; // 0…1 along p0→p2
-  return p0_s + ratio * ( p2_s - p0_s );
+  double ratio = phi / theta;
+  ratio = std::clamp( ratio, 0.0, 1.0 );
+
+  const double refined_s = p0_s + ratio * ( p2_s - p0_s );
+
+  if( !std::isfinite( refined_s ) )
+  {
+    return coarse_s;
+  }
+
+  return refined_s;
+}
+
+// function to get s on route for a given state, used for shifted routes in obstacle avoidance
+template <typename State>
+double get_s_on_reference_line_segments(
+  const map::Route& route,
+  const State& state,
+  double coarse_s,
+  double search_window = 20.0 )
+{
+  if( route.reference_line.size() < 2 )
+  {
+    return std::numeric_limits<double>::infinity();
+  }
+
+  const double s_min = coarse_s - search_window;
+  const double s_max = coarse_s + search_window;
+
+  auto it = route.reference_line.lower_bound( s_min );
+  if( it == route.reference_line.end() )
+  {
+    return route.reference_line.rbegin()->first;
+  }
+
+  if( it != route.reference_line.begin() )
+  {
+    --it;
+  }
+
+  double best_s = it->first;
+  double best_d2 = std::numeric_limits<double>::max();
+
+  auto next = std::next( it );
+
+  for( ; next != route.reference_line.end(); ++it, ++next )
+  {
+    const double s0 = it->first;
+    const double s1 = next->first;
+
+    if( s0 > s_max )
+    {
+      break;
+    }
+
+    const auto& p0 = it->second;
+    const auto& p1 = next->second;
+
+    const double vx = p1.x - p0.x;
+    const double vy = p1.y - p0.y;
+    const double wx = state.x - p0.x;
+    const double wy = state.y - p0.y;
+
+    const double len2 = vx * vx + vy * vy;
+    if( len2 < 1e-9 )
+    {
+      continue;
+    }
+
+    double t = ( wx * vx + wy * vy ) / len2;
+    t = std::clamp( t, 0.0, 1.0 );
+
+    const double px = p0.x + t * vx;
+    const double py = p0.y + t * vy;
+
+    const double dx = state.x - px;
+    const double dy = state.y - py;
+    const double d2 = dx * dx + dy * dy;
+
+    if( d2 < best_d2 )
+    {
+      best_d2 = d2;
+      best_s = s0 + t * ( s1 - s0 );
+    }
+  }
+
+  return best_s;
 }
 
 } // namespace map
