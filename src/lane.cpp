@@ -14,11 +14,9 @@
 #include "adore_map/lane.hpp"
 
 namespace adore
-
 {
 namespace map
 {
-
 
 double
 Lane::get_width( double s ) const

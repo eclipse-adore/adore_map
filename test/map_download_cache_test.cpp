@@ -22,7 +22,7 @@
 #include "adore_map/map.hpp"
 #include "adore_map/map_loader.hpp"
 #include "adore_map/road_graph.hpp"
-#include "adore_map/config.hpp"
+#include "adore_tridap/config_map_downloader.hpp"
 
 #ifndef ADORE_MAP_TEST_DATA_DIR
   // Fallback – will be overridden from CMake for real tests.
@@ -51,6 +51,10 @@ get_test_map_r2s_file_cache_path()
 
 std::stringstream* buffer;
 std::streambuf* sbuf;
+
+using namespace adore::map;
+using namespace adore::r2s;
+using namespace adore::tridap;
 
 // Test fixture for MapDownloadCache tests, with setup and teardown to suppress output during tests
 // All tests use a local file cache, so no actual downloading from a server is performed
@@ -122,9 +126,9 @@ class MapDownloadCacheTest : public testing::Test
 // Basic smoke test: we can load the map and it has roads, lanes and a lane graph.
 TEST_F( MapDownloadCacheTest, loaded_map_has_roads_lanes_and_graph )
 {
-  Config cfg( get_test_map_r2s_cfg_path() );
+  ConfigMapDownloader cfg( get_test_map_r2s_cfg_path() );
   MapDownloader map_downloader( cfg, get_test_map_r2s_file_cache_path() );
-  adore::map::Map map = adore::map::MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
+  Map map = MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
     cfg.layer_name_lane_borders, false );
 
   // Structural checks
@@ -156,9 +160,9 @@ TEST_F( MapDownloadCacheTest, loaded_map_has_roads_lanes_and_graph )
 // Check that all lane-graph connections refer to lanes that actually exist in the map.
 TEST_F( MapDownloadCacheTest, lane_graph_connections_reference_existing_lanes )
 {
-  Config cfg( get_test_map_r2s_cfg_path() );
+  ConfigMapDownloader cfg( get_test_map_r2s_cfg_path() );
   MapDownloader map_downloader( cfg, get_test_map_r2s_file_cache_path() );
-  adore::map::Map map = adore::map::MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
+  Map map = MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
     cfg.layer_name_lane_borders, false );
 
   for( const auto& connection : map.lane_graph.all_connections )
@@ -171,9 +175,9 @@ TEST_F( MapDownloadCacheTest, lane_graph_connections_reference_existing_lanes )
 // Ensure that the quadtree actually contains points from at least one loaded lane.
 TEST_F( MapDownloadCacheTest, quadtree_contains_points_from_lanes )
 {
-  Config cfg( get_test_map_r2s_cfg_path() );
+  ConfigMapDownloader cfg( get_test_map_r2s_cfg_path() );
   MapDownloader map_downloader( cfg, get_test_map_r2s_file_cache_path() );
-  adore::map::Map map = adore::map::MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
+  Map map = MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
     cfg.layer_name_lane_borders, false );
 
   // Pick any lane.
@@ -197,19 +201,19 @@ TEST_F( MapDownloadCacheTest, quadtree_contains_points_from_lanes )
 // Ensure that the reference line and lane border data loaded from WFS matches the data loaded from files (which had been downloaded by a Python program).
 TEST_F( MapDownloadCacheTest, results_comparable_to_legacy_results )
 {
-  Config cfg( get_test_map_r2s_cfg_path() );
+  ConfigMapDownloader cfg( get_test_map_r2s_cfg_path() );
   MapDownloader map_downloader( cfg, get_test_map_r2s_file_cache_path() );
-  adore::map::Map map = adore::map::MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
+  Map map = MapLoader::download_from_wfs( map_downloader, cfg.layer_name_reference_lines, 
     cfg.layer_name_lane_borders, false );
 
   // Load reference line and lane border data from CSV files created using a Python downloader and the R2S parser 
   // (the legacy methods for loading map data). These files were created from the same source as the WFS data, so they should match.
-  auto border_data_r2sr_from_file = adore::r2s::load_border_data_from_r2sr_file( get_test_map_r2s_r2sr_path() );
+  auto border_data_r2sr_from_file = load_border_data_from_r2sr_file( get_test_map_r2s_r2sr_path() );
   // The same path is passed to the next method since the method will change the suffix to .r2sl internally 
-  auto border_data_r2sl_from_file = adore::r2s::load_border_data_from_r2sl_file( get_test_map_r2s_r2sr_path() );
+  auto border_data_r2sl_from_file = load_border_data_from_r2sl_file( get_test_map_r2s_r2sr_path() );
 
-  auto border_data_r2sr_from_wfs = adore::r2s::download_reference_lines( map_downloader, cfg.layer_name_reference_lines );
-  auto border_data_r2sl_from_wfs = adore::r2s::download_lane_borders( map_downloader, cfg.layer_name_lane_borders );
+  auto border_data_r2sr_from_wfs = download_reference_lines( map_downloader, cfg.layer_name_reference_lines );
+  auto border_data_r2sl_from_wfs = download_lane_borders( map_downloader, cfg.layer_name_lane_borders );
   
   // Next line uses operator!= defined in BorderDataR2SR, which uses a tolerance for comparing x and y coordinates
   EXPECT_FALSE( border_data_r2sr_from_file != border_data_r2sr_from_wfs )
@@ -221,7 +225,7 @@ TEST_F( MapDownloadCacheTest, results_comparable_to_legacy_results )
 
 TEST_F( MapDownloadCacheTest, files_match_after_saving_loading_and_saving_again )
 {
-  Config cfg( get_test_map_r2s_cfg_path() );
+  ConfigMapDownloader cfg( get_test_map_r2s_cfg_path() );
   MapDownloader map_downloader( cfg, get_test_map_r2s_file_cache_path() );
 
   // Load the first map layer as JSON: layer name is that for reference lines

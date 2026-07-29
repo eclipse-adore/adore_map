@@ -18,7 +18,6 @@ namespace adore
 namespace map
 {
 
-
 bool
 RoadGraph::add_connection( Connection connection )
 {

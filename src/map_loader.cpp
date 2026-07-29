@@ -17,6 +17,7 @@ namespace adore
 {
 namespace map
 {
+
 Map
 MapLoader::load_from_file( const std::string& map_file_location, bool allow_lane_changes, bool ignore_non_driving )
 {
@@ -57,22 +58,23 @@ MapLoader::load_from_r2s_file( const std::string& map_file_location, bool allow_
 {
   Map map;
 
-  auto border_data_r2sr = adore::r2s::load_border_data_from_r2sr_file( map_file_location );
-  auto border_data_r2sl = adore::r2s::load_border_data_from_r2sl_file( map_file_location );
+  auto border_data_r2sr = r2s::load_border_data_from_r2sr_file( map_file_location );
+  auto border_data_r2sl = r2s::load_border_data_from_r2sl_file( map_file_location );
 
   create_from_r2s( map, border_data_r2sr, border_data_r2sl, allow_lane_changes );
 
   return map;
 }
 
+// Downloads map data from a WFS server and constructs a Map object
 Map
-MapLoader::download_from_wfs( MapDownloader& downloader, const std::string& reference_lines_layer_name, 
+MapLoader::download_from_wfs( tridap::MapDownloader& downloader, const std::string& reference_lines_layer_name, 
   const std::string& lane_borders_layer_name, bool allow_lane_changes, bool /*ignore_non_driving*/ )
 {
   Map map;
 
-  auto border_data_r2sr = adore::r2s::download_reference_lines( downloader, reference_lines_layer_name );
-  auto border_data_r2sl = adore::r2s::download_lane_borders( downloader, lane_borders_layer_name );
+  auto border_data_r2sr = r2s::download_reference_lines( downloader, reference_lines_layer_name );
+  auto border_data_r2sl = r2s::download_lane_borders( downloader, lane_borders_layer_name );
 
   create_from_r2s( map, border_data_r2sr, border_data_r2sl, allow_lane_changes );
 

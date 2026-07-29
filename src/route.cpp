@@ -203,6 +203,5 @@ Route::initialize_reference_line()
   }
 }
 
-
 } // namespace map
 } // namespace adore

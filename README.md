@@ -1,7 +1,7 @@
 # Map Library for Autonomous Vehicles
 
 ## Overview
-The **Map Library** provides  tools for handling map data in autonomous vehicle simulations. It includes modules for lane and route management, spatial querying using quadtree structures, geographic coordinate conversions. The library is designed for efficiency and integration with autonomous vehicle systems.
+The **Map Library** provides tools for handling map data in autonomous vehicle simulations. It includes modules for lane and route management, spatial querying using quadtree structures, geographic coordinate conversions. The library is designed for efficiency and integration with autonomous vehicle systems.
 
 ---
 
@@ -12,8 +12,8 @@ The **Map Library** provides  tools for handling map data in autonomous vehicle 
   - Support for geospatial data handling and storage.
 - **Quadtree Spatial Indexing**:
   - Efficient spatial querying.
-- **Map Parsing and Loading**:
-  - Tools for loading and parsing maps, including Road2Simulation (R2S) format support.
+- **Map Parsing, Downloading and Loading**:
+  - Tools for downloading or loading and parsing maps, including Road2Simulation (R2S) format support.
 - **Geographic Conversions**:
   - Latitude/longitude to UTM coordinate transformations.
 
@@ -38,7 +38,7 @@ The **Map Library** provides  tools for handling map data in autonomous vehicle 
 
 ### Map Loader
 **File:** `map_loader.hpp`
-- Handles the loading of map data from external files or formats.
+- Handles the download of map data from a Web Feature Service (WFS), and the loading of map data from external files or formats.
 - Includes support for parsing the Road2Simulation (R2S) format.
 
 ### Map Point

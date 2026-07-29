@@ -26,7 +26,6 @@ namespace adore
 namespace map
 {
 
-
 // Function to execute a shell command and capture its output
 std::string execute_shell_command( const std::string& command );
 
@@ -38,5 +37,6 @@ std::vector<double> convert_utm_to_lat_lon_python( double utm_x, double utm_y, i
 // Function to convert Latitude and Longitude UTM coordinates
 std::vector<double> convert_lat_lon_to_utm( double lat, double lon );
 std::vector<double> convert_lat_lon_to_utm_python( double lat, double lon );
+
 } // namespace map
 } // namespace adore

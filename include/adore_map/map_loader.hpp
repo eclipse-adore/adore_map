@@ -17,7 +17,7 @@
 
 #include "adore_map/map.hpp"
 #include "adore_map/r2s_parser.h"
-#include "adore_map/map_downloader.hpp"
+#include "adore_tridap/map_downloader.hpp"
 
 #include "OpenDriveMap.h"
 #include "RoutingGraph.h"
@@ -55,7 +55,7 @@ public:
    * @param[in] ignore_non_driving Boolean flag to indicate whether non-driving lanes should be ignored in the resulting Map
    * @return A Map object constructed from the downloaded map data
    */
-  static Map download_from_wfs( MapDownloader& downloader, const std::string& reference_lines_layer_name, 
+  static Map download_from_wfs( tridap::MapDownloader& downloader, const std::string& reference_lines_layer_name, 
     const std::string& lane_borders_layer_name, bool allow_lane_changes = true, bool ignore_non_driving = false );
 
 private:

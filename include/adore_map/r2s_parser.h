@@ -21,8 +21,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "adore_map/map_downloader.hpp"
 #include "adore_map/helpers.hpp"
+#include "adore_tridap/map_downloader.hpp"
 
 namespace adore
 {
@@ -113,42 +113,42 @@ std::vector<BorderDataR2SR> load_border_data_from_r2sr_file( const std::string& 
  * @param[in] layer_name Name of the WFS layer to load reference lines from
  * @return A vector of BorderDataR2SR objects representing the loaded reference lines
  */
-std::vector<BorderDataR2SR> download_reference_lines( MapDownloader& downloader, const std::string& layer_name );
+std::vector<BorderDataR2SR> download_reference_lines( tridap::MapDownloader& downloader, const std::string& layer_name );
 
 /** @brief Load reference lines from a JSON file using MapDownloader
  * @param[in] downloader Reference to the MapDownloader instance
  * @param[in] file_name Name of the file to load reference lines from
  * @return A vector of BorderDataR2SR objects representing the loaded reference lines
  */
-std::vector<BorderDataR2SR> load_reference_lines_from_json_file( MapDownloader& downloader, const std::string& file_name );
+std::vector<BorderDataR2SR> load_reference_lines_from_json_file( tridap::MapDownloader& downloader, const std::string& file_name );
 
 /** @brief Parse reference lines from the JSON data in MapDownloader
  * @note Assumes that the JSON data has already been loaded into the MapDownloader
  * @param[in] downloader Reference to the MapDownloader instance
  * @return A vector of BorderDataR2SR objects parsed from the JSON data
  */
-std::vector<BorderDataR2SR> parse_reference_lines( MapDownloader& downloader );
+std::vector<BorderDataR2SR> parse_reference_lines( tridap::MapDownloader& downloader );
 
 /** @brief Load lane borders from a WFS layer using MapDownloader
  * @param[in] downloader Reference to the MapDownloader instance
  * @param[in] layer_name Name of the WFS layer to load lane borders from
  * @return A vector of BorderDataR2SL objects representing the loaded lane borders
  */
-std::vector<BorderDataR2SL> download_lane_borders( MapDownloader& downloader, const std::string& layer_name );
+std::vector<BorderDataR2SL> download_lane_borders( tridap::MapDownloader& downloader, const std::string& layer_name );
 
 /** @brief Load lane borders from a JSON file using MapDownloader
  * @param[in] downloader Reference to the MapDownloader instance
  * @param[in] file_name Name of the file to load lane borders from
  * @return A vector of BorderDataR2SL objects representing the loaded lane borders
  */
-std::vector<BorderDataR2SL> load_lane_borders_from_json_file( MapDownloader& downloader, const std::string& file_name );
+std::vector<BorderDataR2SL> load_lane_borders_from_json_file( tridap::MapDownloader& downloader, const std::string& file_name );
 
 /** @brief Parse lane borders from the JSON data in MapDownloader
  * @note Assumes that the JSON data has already been loaded into the MapDownloader
  * @param[in] downloader Reference to the MapDownloader instance
  * @return A vector of BorderDataR2SL objects parsed from the JSON data
  */
-std::vector<BorderDataR2SL> parse_lane_borders( MapDownloader& downloader );
+std::vector<BorderDataR2SL> parse_lane_borders( tridap::MapDownloader& downloader );
 
 // Print utility functions for debugging
 void print_string( const std::string& string_to_print );

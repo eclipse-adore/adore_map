@@ -28,6 +28,7 @@ namespace adore
 {
 namespace map
 {
+
 struct Border
 {
 
@@ -94,7 +95,6 @@ void interpolate_borders( Borders& borders, double spacing_s );
 void process_center( Borders& borders );
 
 void set_parent_id( Borders& borders, size_t parent_id );
-
 
 } // namespace map
 } // namespace adore

@@ -40,7 +40,6 @@ namespace adore
 namespace map
 {
 
-
 std::string
 execute_shell_command( const std::string& command )
 {
@@ -294,5 +293,6 @@ convert_lat_lon_to_utm_python( double lat, double lon )
 
   return output;
 }
+
 } // namespace map
 } // namespace adore

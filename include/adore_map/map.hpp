@@ -37,7 +37,6 @@ namespace adore
 namespace map
 {
 
-
 // The Map class definition
 class Map
 {
@@ -264,7 +263,6 @@ get_map_distance( const MapPoint& start_point, const MapPoint& end_point, const 
 
   return total_distance;
 }
-
 
 } // namespace map
 } // namespace adore

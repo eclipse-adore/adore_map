@@ -29,6 +29,7 @@ namespace adore
 {
 namespace map
 {
+
 enum LaneMaterial
 {
   asphalt,
@@ -124,7 +125,6 @@ struct Road
     set_category( road_category_string );
   }
 };
-
 
 } // namespace map
 } // namespace adore

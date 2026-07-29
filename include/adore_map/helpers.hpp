@@ -34,7 +34,7 @@ remove_duplicate_points( std::vector<MapPoint>& points )
 namespace r2s
 {
 
-/** @brief Rounds a double to six decimal places.
+/** @brief Rounds a double to six decimal places
  */
 inline static double 
 round_to_six_decimal_places( const double number ) {
@@ -42,5 +42,4 @@ round_to_six_decimal_places( const double number ) {
 }
 
 } // namespace r2s
-
 } // namespace adore

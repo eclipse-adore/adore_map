@@ -21,7 +21,6 @@ namespace adore
 namespace map
 {
 
-
 struct TrafficLight
 {
   std::vector<adore::math::Point2d> control_points;

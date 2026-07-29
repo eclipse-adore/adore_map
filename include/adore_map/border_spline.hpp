@@ -27,9 +27,9 @@
 
 namespace adore
 {
-
 namespace map
 {
+
 class BorderSpline
 {
 private:
@@ -248,7 +248,6 @@ public:
     return distances_.back();
   }
 };
-
 
 } // namespace map
 } // namespace adore
