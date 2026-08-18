@@ -29,6 +29,8 @@ namespace map
 
 using LaneID = size_t;
 
+using Tangent = std::pair<double, double>;
+
 enum ConnectionType
 {
   END_TO_START,
@@ -91,6 +93,35 @@ struct ConnectionHasher
   }
 };
 
+struct DirectedLane
+{
+  LaneID lane_id;
+  bool   reverse; // true = traversing this lane from end -> start (decreasing s)
+
+  bool
+  operator==( const DirectedLane& other ) const
+  {
+    return lane_id == other.lane_id && reverse == other.reverse;
+  }
+
+  bool
+  operator<( const DirectedLane& other ) const
+  {
+    if( lane_id != other.lane_id )
+      return lane_id < other.lane_id;
+    return reverse < other.reverse;
+  }
+};
+
+struct DirectedLaneHasher
+{
+  std::size_t
+  operator()( const DirectedLane& dl ) const
+  {
+    return std::hash<LaneID>()( dl.lane_id ) ^ ( std::hash<bool>()( dl.reverse ) << 1 );
+  }
+};
+
 struct RoadGraph
 {
   RoadGraph() {};
@@ -105,6 +136,14 @@ struct RoadGraph
   std::deque<LaneID> get_best_path( LaneID from, LaneID to ) const;
 
   std::deque<LaneID> find_path( LaneID from, LaneID to, bool allow_reverse ) const;
+
+  std::deque<DirectedLane> find_path( LaneID from, LaneID to, bool start_reverse,
+                                      const std::function<std::optional<Tangent>( LaneID, bool )>& get_tangent,
+                                      double                                                       max_uturn_cos ) const;
+
+  std::deque<DirectedLane> get_best_path( LaneID from, LaneID to, bool start_reverse,
+                                          const std::function<std::optional<Tangent>( LaneID, bool )>& get_tangent,
+                                          double                                                       max_uturn_cos = -0.7 ) const;
 
   // Helper function to reconstruct the path from `from` to `to`
   std::deque<LaneID> reconstruct_path( LaneID from, LaneID to, const std::unordered_map<LaneID, LaneID>& previous_roads ) const;
