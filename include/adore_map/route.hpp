@@ -85,27 +85,106 @@ Route::Route( const StartPoint& start_point, const EndPoint& end, const std::sha
   destination.y = end.y;
   map           = reference_map;
 
-  // Find nearest start and end points using the quadtree
   double min_start_dist      = std::numeric_limits<double>::max();
   auto   nearest_start_point = map->quadtree.get_nearest_point( start, min_start_dist );
 
   double min_end_dist      = std::numeric_limits<double>::max();
   auto   nearest_end_point = map->quadtree.get_nearest_point( end, min_end_dist );
 
-
   if( nearest_start_point && nearest_end_point )
   {
     size_t start_lane_id = nearest_start_point->parent_id;
     size_t end_lane_id   = nearest_end_point->parent_id;
 
-    // Find the best path between the start and end lanes
-    auto lane_id_route = map->lane_graph.get_best_path( start_lane_id, end_lane_id );
-
-    // Iterate over the route and process each lane
-    for( size_t i = 0; i < lane_id_route.size(); ++i )
+    // 1) Determine which direction along the start lane matches the
+    //    vehicle's current heading. This becomes the mandatory starting
+    //    direction for the graph search below.
+    bool heading_wants_reverse = false;
     {
-      auto lane = map->lanes.at( lane_id_route[i] );
-      add_route_section( lane->borders.center, *nearest_start_point, *nearest_end_point, lane->left_of_reference );
+      auto        start_lane = map->lanes.at( start_lane_id );
+      const auto& pts        = start_lane->borders.center.interpolated_points;
+
+      if( pts.size() >= 2 )
+      {
+        auto it = std::lower_bound( pts.begin(), pts.end(), nearest_start_point->s,
+                                     []( const auto& pt, double val ) { return pt.s < val; } );
+        size_t idx = static_cast<size_t>( std::distance( pts.begin(), it ) );
+        if( idx == 0 )
+          idx = 1;
+        if( idx >= pts.size() )
+          idx = pts.size() - 1;
+
+        const auto& p1  = pts[idx - 1];
+        const auto& p2  = pts[idx];
+        double      dx  = p2.x - p1.x;
+        double      dy  = p2.y - p1.y;
+        double      len = std::sqrt( dx * dx + dy * dy );
+
+        if( len > 1e-9 )
+        {
+          double tangent_x = dx / len;
+          double tangent_y = dy / len;
+          double heading_x = std::cos( start_point.yaw_angle );
+          double heading_y = std::sin( start_point.yaw_angle );
+          double alignment = heading_x * tangent_x + heading_y * tangent_y;
+
+          heading_wants_reverse = ( alignment < 0.0 );
+        }
+      }
+    }
+
+    // 2) Tangent lookup used by the graph search to detect U-turns at
+    //    lane junctions (needed because ConnectionType alone doesn't
+    //    capture actual junction geometry/angle).
+    std::shared_ptr<Map> map_for_lambda = map; // local copy: avoids capturing the member 'map' via 'this'
+
+    auto get_tangent = [map_for_lambda]( LaneID id, bool at_end ) -> std::optional<std::pair<double, double>>
+    {
+      auto it = map_for_lambda->lanes.find( id );
+      if( it == map_for_lambda->lanes.end() )
+        return std::nullopt;
+
+      const auto& pts = it->second->borders.center.interpolated_points;
+      if( pts.size() < 2 )
+        return std::nullopt;
+
+      size_t i0 = at_end ? pts.size() - 2 : 0;
+      size_t i1 = at_end ? pts.size() - 1 : 1;
+
+      double dx  = pts[i1].x - pts[i0].x;
+      double dy  = pts[i1].y - pts[i0].y;
+      double len = std::sqrt( dx * dx + dy * dy );
+      if( len < 1e-9 )
+        return std::nullopt;
+
+      return std::make_pair( dx / len, dy / len );
+    };
+
+    // 3) Search for a U-turn-free path starting in the vehicle's heading
+    //    direction. If none exists (e.g. destination is only reachable
+    //    via a genuine reversal, such as a cul-de-sac), fall back to an
+    //    unconstrained search rather than leaving the vehicle without a
+    //    route at all.
+    constexpr double kMaxUTurnCos = -0.7; // reject turns sharper than ~135 degrees
+
+    auto directed_route = map->lane_graph.get_best_path( start_lane_id, end_lane_id, heading_wants_reverse,
+                                                           get_tangent, kMaxUTurnCos );
+
+    if( directed_route.empty() )
+    {
+      std::cerr << "Route: no U-turn-free path found, retrying without U-turn constraint" << std::endl;
+      directed_route = map->lane_graph.get_best_path( start_lane_id, end_lane_id, heading_wants_reverse, get_tangent,
+                                                        -1.0 ); // only forbid exact 180s
+    }
+
+    // 4) Build sections directly from the directed path -- each entry
+    //    already carries the correct traversal direction as determined
+    //    by the search, so no separate left_of_reference/override logic
+    //    is needed here anymore.
+    for( const auto& directed_lane : directed_route )
+    {
+      auto lane = map->lanes.at( directed_lane.lane_id );
+      add_route_section( lane->borders.center, *nearest_start_point, *nearest_end_point, directed_lane.reverse );
     }
 
     initialize_reference_line();
