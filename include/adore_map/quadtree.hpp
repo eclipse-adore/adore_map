@@ -31,7 +31,14 @@ public:
   // Boundary for this node (a simple square region)
   struct Boundary
   {
-    double x_min, x_max, y_min, y_max;
+    // A default-constructed tree is an empty, deterministic point-sized tree.
+    // Map loaders replace this boundary before inserting geometry. Initializing
+    // it here prevents range queries on a deliberately empty Map from reading
+    // indeterminate values.
+    double x_min = 0.0;
+    double x_max = 0.0;
+    double y_min = 0.0;
+    double y_max = 0.0;
 
     // Check if a point lies within this boundary
     template<typename QueryPoint>
